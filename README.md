@@ -80,3 +80,45 @@ cargo check
 
 # テスト実行
 cargo test
+
+## TAVILY Search ツール統合
+
+OpenAI の function calling から利用できる Web 検索ツール `TAVILY_search` を追加しました。モデルがツール呼び出しを提案すると、バックエンドワーカーが TAVILY API を呼び出し、その結果(JSON)を最終回答生成に渡します。
+
+### 環境変数
+`TAVILY_API_KEY` を設定してください。未設定の場合、ツールは `{ "error": "missing TAVILY_API_KEY env" }` を返します。
+
+Windows PowerShell 例:
+```powershell
+$env:TAVILY_API_KEY = "tvly-..."
+```
+
+### ツール名と引数スキーマ
+- ツール名: `TAVILY_search`
+- 引数:
+	- `query`: 文字列 (必須)
+	- `max_results`: 数値 (任意, 1-10, 省略時 5)
+
+### 返却JSON (例)
+TAVILY API のレスポンス JSON をそのまま（あるいは `raw` / `error` フィールドを含む簡易オブジェクト）で返します。
+
+### 実装概要
+- ファイル: `src/openai/TAVILY.rs`
+- HTTPクライアント: `reqwest` (blocking) をワーカースレッドで同期利用
+- OpenAI との 2 ステップ: ツール提案 -> 実行 -> 関数結果を 2 度目の Chat Completion に投入
+
+### 拡張アイデア
+- 検索深度や日時フィルタなど追加パラメータをスキーマに露出
+- 非同期化 / キャッシュ
+- レスポンス要約を補助する追加ツール
+
+### 直接呼び出し
+アプリ内部やテストから直接 Web 検索を行いたい場合は関数を利用できます:
+
+```rust
+use rust_test::openai::TAVILY_search;
+
+let json = TAVILY_search("Rust programming language", 3)?;
+println!("{:?}", json);
+```
+

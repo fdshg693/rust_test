@@ -4,6 +4,7 @@ pub mod worker;
 pub mod simple;
 pub mod call_tool;
 pub mod tool;
+pub mod tavily;
 
 // 代表的な公開APIを再エクスポート
 pub use worker::start_openai_worker;
@@ -17,3 +18,4 @@ pub use call_tool::{
 	ToolCallDecision,
 };
 pub use tool::{ToolDefinition, build_get_constants_tool};
+pub use tavily::{build_tavily_search_tool, tavily_search};

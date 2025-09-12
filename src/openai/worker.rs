@@ -48,7 +48,9 @@ async fn process_prompt(
     config: &Config,
 ) -> String {
     // 1. 利用可能ツール定義（将来的に増えるなら別関数化）
-    let tools_defs = vec![build_get_constants_tool(X, Y)];
+    let tools_defs = vec![
+        build_get_constants_tool(X, Y),
+    ];
     let tools_for_api: Vec<_> = tools_defs.iter().map(|t| t.as_chat_tool()).collect();
 
     // 2. ツール呼び出し提案フェーズ
