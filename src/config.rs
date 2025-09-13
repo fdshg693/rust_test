@@ -21,7 +21,7 @@ impl Default for Config {
         Self {
             model: "gpt-4o-mini".to_string(),
             // NOTE: Keep in sync with tests (tests/config_tests.rs) and design doc.
-            max_tokens: 512,
+            max_tokens: 2000,
             poll_interval_ms: 100,
         }
     }

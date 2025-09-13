@@ -8,7 +8,7 @@ fn _load_dotenv() { let _ = dotenvy::dotenv(); }
 fn config_defaults() {
     let c = Config::new();
     assert_eq!(c.model, "gpt-4o-mini");
-    assert_eq!(c.max_tokens, 512);
+    assert_eq!(c.max_tokens, 2000);
     assert_eq!(c.poll_interval_ms, 100);
 }
 

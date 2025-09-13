@@ -17,6 +17,8 @@ pub use call_tool::{
 	propose_tool_call,
 	propose_tool_call_blocking,
 	ToolCallDecision,
+    ToolResolution,
+    resolve_and_execute_tool_call,
 };
 pub use tool::{ToolDefinition, build_get_constants_tool};
 pub use docs_tool::build_read_doc_tool;

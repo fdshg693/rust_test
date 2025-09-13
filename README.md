@@ -122,3 +122,28 @@ let json = TAVILY_search("Rust programming language", 3)?;
 println!("{:?}", json);
 ```
 
+### ツール提案と実行の簡略化ヘルパ
+
+`call_tool.rs` に `resolve_and_execute_tool_call` と結果列挙体 `ToolResolution` を追加し、
+ツール提案 (`ToolCallDecision`) から実行フェーズまでの典型処理を統一しました。
+
+```rust
+use rust_test::openai::{propose_tool_call, resolve_and_execute_tool_call, ToolResolution};
+
+// 1. ツール提案
+let decision = propose_tool_call("定数を教えて", &tools, &config).await?;
+// 2. 提案結果の解決 & 実行
+let resolution = resolve_and_execute_tool_call(decision, &tools);
+
+match resolution {
+	ToolResolution::ModelText(t) => println!("model text: {t}"),
+	ToolResolution::Executed { name, result } => println!("executed {name}: {result}"),
+	ToolResolution::ToolNotFound { requested } => eprintln!("tool not found: {requested}"),
+	ToolResolution::ArgumentsParseError { name, error, .. } => eprintln!("args parse error for {name}: {error}"),
+	ToolResolution::ExecutionError { name, error } => eprintln!("execution error for {name}: {error}"),
+}
+```
+
+`ToolResolution::Executed` の場合のみ 2 回目の Chat Completion を行い会話へ組み込む実装は
+`openai/worker.rs` を参照してください。
+

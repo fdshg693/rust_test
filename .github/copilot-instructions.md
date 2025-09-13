@@ -15,7 +15,7 @@ Key files
 - `src/event.rs`: key handling. Enter submits prompt; Esc/Ctrl+C exits; Backspace deletes; normal chars append.
 - `src/openai.rs`: background worker. Spawns a thread, builds a Tokio runtime, uses `async-openai` Chat Completions. Two-step “function calling” flow with `get_constants` example.
 - `src/ui.rs`: rendering. Layout panels: Guide, Input, Last Submitted, AI Answer, Footer (elapsed seconds). Uses `ratatui::widgets` and simple styling.
-- `src/config.rs`: defaults (`model: gpt-4o-mini`, `max_tokens: 512`), plus example constants `X=42`, `Y=7` used by the OpenAI function.
+- `src/config.rs`: defaults (`model: gpt-4o-mini`, `max_tokens: 2000`), plus example constants `X=42`, `Y=7` used by the OpenAI function.
 
 ## Data flow and boundaries
 - UI thread (lib.rs): never blocks on network/IO. Sends prompts via `App.tx: Sender<String>` and polls `App.rx.try_recv()` each frame (`check_ai_response`).

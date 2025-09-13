@@ -5,7 +5,12 @@
 //! `ToolDefinition` を用いて 2 ステップ (提案→実行→最終回答) を実装する。
 
 use crate::config::{Config, X, Y};
-use crate::openai::{propose_tool_call, ToolCallDecision, build_get_constants_tool, build_read_doc_tool};
+use crate::openai::{
+    propose_tool_call,
+    ToolResolution,
+    resolve_and_execute_tool_call,
+    build_tavily_search_tool,
+};
 use async_openai::types::{
     ChatCompletionRequestFunctionMessageArgs,
     ChatCompletionRequestSystemMessageArgs,
@@ -13,7 +18,6 @@ use async_openai::types::{
     CreateChatCompletionRequestArgs,
 };
 use async_openai::Client;
-use serde_json::{json, Value};
 use std::sync::mpsc::{Receiver, Sender};
 use tokio::runtime::Runtime;
 use tracing::{info, debug, error, instrument};
@@ -49,8 +53,9 @@ async fn process_prompt(
 ) -> String {
     // 1. 利用可能ツール定義（将来的に増えるなら別関数化）
     let tools_defs = vec![
-        build_get_constants_tool(X, Y),
-        build_read_doc_tool(),
+        // build_get_constants_tool(X, Y),
+        // build_read_doc_tool(),
+        build_tavily_search_tool(),
     ];
     // 2. ツール呼び出し提案フェーズ（ToolDefinition のスライスを直接渡す）
     let decision = match propose_tool_call(prompt, &tools_defs, config).await {
@@ -74,45 +79,23 @@ async fn process_prompt(
         (Err(e), _) | (_, Err(e)) => return format!("メッセージ構築エラー: {e}"),
     };
 
-    match decision {
-        ToolCallDecision::Text(t) => t, // そのまま回答
-        ToolCallDecision::ToolCall { name, arguments } => {
-            // 4. 対応ツールを探索
-            let tool = match tools_defs.iter().find(|d| d.name == name) {
-                Some(t) => t,
-                None => return format!("未知のツール要求: {name}"),
-            };
-
-            // 5. 引数JSON をパース（失敗したら空オブジェクト）
-            let args_val: Value = match serde_json::from_str(&arguments) {
-                Ok(v) => v,
-                Err(e) => {
-                    debug!(target = "openai", "arguments_parse_error: {e}; using empty object");
-                    json!({})
-                }
-            };
-
-            // 6. ツール実行
-            let tool_result = match tool.execute(&args_val) {
-                Ok(v) => v,
-                Err(e) => {
-                    error!(target: "openai", "tool_execute_error: {e}");
-                    json!({"error": format!("tool execution failed: {e}")})
-                }
-            };
-            debug!(target: "openai", tool_name = tool.name, result = %tool_result, "tool_executed");
-
-            // 7. 関数結果メッセージを組み立て  -> 最終回答取得
-            let function_message = ChatCompletionRequestFunctionMessageArgs::default()
-                .name(tool.name)
-                .content(tool_result.to_string())
-                .build();
-            let function_message = match function_message {
-                Ok(m) => m,
-                Err(e) => return format!("関数結果メッセージ構築エラー: {e}"),
-            };
-
-            let second_req = CreateChatCompletionRequestArgs::default()
+    let resolution = resolve_and_execute_tool_call(decision, &tools_defs);
+    debug!(target: "openai", ?resolution, "tool_resolution");
+    match resolution {
+        ToolResolution::ModelText(t) => t,
+        ToolResolution::ToolNotFound { requested } => format!("未知のツール要求: {requested}"),
+        ToolResolution::ArgumentsParseError { name, raw: _, error } => format!("{name} の引数JSONパース失敗: {error}"),
+        ToolResolution::ExecutionError { name, error } => format!("{name} 実行エラー: {error}"),
+        ToolResolution::Executed { name, result } => {
+            // 関数結果を function message として 2 回目呼び出し
+            let function_message = match ChatCompletionRequestFunctionMessageArgs::default()
+                .name(&name)
+                .content(result.to_string())
+                .build() {
+                    Ok(m) => m,
+                    Err(e) => return format!("関数結果メッセージ構築エラー: {e}"),
+                };
+            let second_req = match CreateChatCompletionRequestArgs::default()
                 .model(&config.model)
                 .messages([
                     system.into(),
@@ -120,13 +103,10 @@ async fn process_prompt(
                     function_message.into(),
                 ])
                 .max_tokens(config.max_tokens)
-                .build();
-
-            let second_req = match second_req {
-                Ok(r) => r,
-                Err(e) => return format!("2回目リクエスト構築エラー: {e}"),
-            };
-
+                .build() {
+                    Ok(r) => r,
+                    Err(e) => return format!("2回目リクエスト構築エラー: {e}"),
+                };
             match client.chat().create(second_req).await {
                 Ok(resp2) => resp2
                     .choices
@@ -148,6 +128,7 @@ async fn process_prompt(
 mod tests {
     use super::*;
     use crate::openai::build_get_constants_tool;
+    use serde_json::json;
 
     #[test]
     fn get_constants_tool_executes() {
