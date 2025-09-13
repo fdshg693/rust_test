@@ -5,7 +5,7 @@
 //! `ToolDefinition` を用いて 2 ステップ (提案→実行→最終回答) を実装する。
 
 use crate::config::{Config, X, Y};
-use crate::openai::{propose_tool_call, ToolCallDecision, build_get_constants_tool};
+use crate::openai::{propose_tool_call, ToolCallDecision, build_get_constants_tool, build_read_doc_tool};
 use async_openai::types::{
     ChatCompletionRequestFunctionMessageArgs,
     ChatCompletionRequestSystemMessageArgs,
@@ -50,6 +50,7 @@ async fn process_prompt(
     // 1. 利用可能ツール定義（将来的に増えるなら別関数化）
     let tools_defs = vec![
         build_get_constants_tool(X, Y),
+        build_read_doc_tool(),
     ];
     let tools_for_api: Vec<_> = tools_defs.iter().map(|t| t.as_chat_tool()).collect();
 

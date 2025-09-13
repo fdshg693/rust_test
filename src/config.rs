@@ -20,7 +20,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             model: "gpt-4o-mini".to_string(),
-            max_tokens: 2000,
+            // NOTE: Keep in sync with tests (tests/config_tests.rs) and design doc.
+            max_tokens: 512,
             poll_interval_ms: 100,
         }
     }
