@@ -1,6 +1,6 @@
 use crate::config::Config;
+use crate::openai::ToolDefinition; // 引数型を ToolDefinition に変更
 use async_openai::types::{
-    ChatCompletionTool,
     ChatCompletionRequestSystemMessageArgs,
     ChatCompletionRequestUserMessageArgs,
     CreateChatCompletionRequestArgs,
@@ -23,7 +23,7 @@ pub enum ToolCallDecision {
 #[instrument(name = "propose_tool_call", skip(config, tools))]
 pub async fn propose_tool_call(
     prompt: &str,
-    tools: Vec<ChatCompletionTool>,
+    tools: &[ToolDefinition],
     config: &Config,
 )
 -> Result<ToolCallDecision> {
@@ -36,10 +36,13 @@ pub async fn propose_tool_call(
         .content(prompt)
         .build()?;
 
+    // ToolDefinition から ChatCompletionTool へ変換
+    let tools_for_api: Vec<_> = tools.iter().map(|t| t.as_chat_tool()).collect();
+
     let req = CreateChatCompletionRequestArgs::default()
         .model(&config.model)
         .messages([system.into(), user.into()])
-        .tools(tools)
+        .tools(tools_for_api)
         .tool_choice("auto")
         .max_tokens(config.max_tokens)
         .build()?;
@@ -73,7 +76,7 @@ pub async fn propose_tool_call(
 #[instrument(name = "propose_tool_call_blocking", skip(config, tools))]
 pub fn propose_tool_call_blocking(
     prompt: &str,
-    tools: Vec<ChatCompletionTool>,
+    tools: &[ToolDefinition],
     config: &Config,
 ) -> Result<ToolCallDecision> {
     let rt = Runtime::new()?;

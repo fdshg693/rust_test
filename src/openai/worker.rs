@@ -52,10 +52,8 @@ async fn process_prompt(
         build_get_constants_tool(X, Y),
         build_read_doc_tool(),
     ];
-    let tools_for_api: Vec<_> = tools_defs.iter().map(|t| t.as_chat_tool()).collect();
-
-    // 2. ツール呼び出し提案フェーズ
-    let decision = match propose_tool_call(prompt, tools_for_api, config).await {
+    // 2. ツール呼び出し提案フェーズ（ToolDefinition のスライスを直接渡す）
+    let decision = match propose_tool_call(prompt, &tools_defs, config).await {
         Ok(d) => d,
         Err(e) => {
             error!(target: "openai", "propose_tool_call_error: {e}");

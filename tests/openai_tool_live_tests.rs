@@ -1,6 +1,5 @@
 use rust_test::config::Config;
-use rust_test::openai::{propose_tool_call_blocking, ToolCallDecision};
-use serde_json::json;
+use rust_test::openai::{propose_tool_call_blocking, ToolCallDecision, build_get_constants_tool};
 
 // Load .env before tests in this integration test binary
 #[ctor::ctor]
@@ -22,7 +21,8 @@ fn live_tool_call_none_tools_returns_text() -> Result<(), Box<dyn std::error::Er
 
     let cfg = Config::new();
     let prompt = "1+1は？短く答えて。";
-    let decision = propose_tool_call_blocking(prompt, vec![], &cfg)?;
+    let empty: [rust_test::openai::ToolDefinition; 0] = [];
+    let decision = propose_tool_call_blocking(prompt, &empty, &cfg)?;
     println!("Decision: {:?}", decision);
 
     match decision {
@@ -38,26 +38,12 @@ fn live_tool_call_none_tools_returns_text() -> Result<(), Box<dyn std::error::Er
 fn live_tool_call_with_function() -> Result<(), Box<dyn std::error::Error>> {
     if skip_if_no_api_key() { return Ok(()); }
 
-    use async_openai::types::{ChatCompletionTool, ChatCompletionToolType, FunctionObject};
-
-    // Define a minimal function tool schema the model can choose
-    let tool = ChatCompletionTool {
-        r#type: ChatCompletionToolType::Function,
-        function: FunctionObject {
-            name: "get_constants".to_string(),
-            description: Some("Return constants X and Y as JSON".to_string()),
-            parameters: Some(json!({
-                "type": "object",
-                "properties": {},
-                "required": []
-            })),
-            strict: Some(false),
-        },
-    };
+    // Use existing helper to build the tool definition
+    let tool_def = build_get_constants_tool(42, 7);
 
     let cfg = Config::new();
     let prompt = "定数XとYの現在値を取得したいです。必要なら get_constants を使ってください。";
-    let decision = propose_tool_call_blocking(prompt, vec![tool], &cfg)?;
+    let decision = propose_tool_call_blocking(prompt, &[tool_def], &cfg)?;
     println!("Decision: {:?}", decision);
 
     match decision {

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use serde_json::{json, Value};
-use crate::openai::ToolDefinition;
+use crate::openai::{ToolDefinition, tool::{ToolParametersBuilder}};
 
 /// docs フォルダ内の特定 Markdown ファイル内容を返すツール。
 /// セキュリティのため列挙されたファイル名のみ許可し、パストラバーサルを防止する。
@@ -13,18 +13,11 @@ pub fn build_read_doc_tool() -> ToolDefinition {
         "ratatui.md",
         "test.md",
     ];
-    let parameters = json!({
-        "type": "object",
-        "properties": {
-            "filename": {
-                "type": "string",
-                "enum": ALLOWED,
-                "description": "Target docs file name (one of benches.md, examples.md, ratatui.md, test.md)"
-            }
-        },
-        "required": ["filename"],
-        "additionalProperties": false
-    });
+    let parameters = ToolParametersBuilder::new_object()
+        .add_string_enum("filename", Some("Target docs file name (one of benches.md, examples.md, ratatui.md, test.md)"), &ALLOWED)
+        .required("filename")
+        .additional_properties(false)
+        .build();
 
     ToolDefinition::new(
         "read_docs_file",
@@ -84,7 +77,7 @@ mod tests {
     fn read_doc_tool_valid_file() -> Result<()> {
         let tool = build_read_doc_tool();
         // benches.md が存在する前提でテキストを読み取る
-        let out = tool.execute(&json!({"filename": "benches.md"}))?;
+    let out = tool.execute(&json!({"filename": "benches.md"}))?;
         assert_eq!(out["filename"], "benches.md");
         assert!(out["content"].as_str().unwrap_or("").len() > 0);
         Ok(())

@@ -13,7 +13,7 @@
 //! The tool returns a JSON object with either the tavily response fields or
 //! `{ "error": "..." }` on failure.
 
-use crate::openai::tool::ToolDefinition;
+use crate::openai::tool::{ToolDefinition, ToolParametersBuilder};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use color_eyre::{Result, eyre::WrapErr};
@@ -73,15 +73,12 @@ pub fn tavily_search(query: &str, max_results: u64) -> Result<Value> {
 
 /// Build a tavily search tool.
 pub fn build_tavily_search_tool() -> ToolDefinition {
-    let parameters = json!({
-        "type": "object",
-        "properties": {
-            "query": { "type": "string", "description": "Search query string to send to tavily" },
-            "max_results": { "type": "integer", "minimum": 1, "maximum": 10, "description": "Maximum number of results to request (1-10)" }
-        },
-        "required": ["query"],
-        "additionalProperties": false
-    });
+    let parameters = ToolParametersBuilder::new_object()
+        .add_string("query", Some("Search query string to send to tavily"))
+        .add_integer("max_results", Some("Maximum number of results to request (1-10)"), Some(1), Some(10))
+        .required("query")
+        .additional_properties(false)
+        .build();
 
     ToolDefinition::new(
         "tavily_search",
@@ -118,7 +115,8 @@ mod tests {
     fn schema_contains_query() {
         let tool = build_tavily_search_tool();
         assert_eq!(tool.name, "tavily_search");
-        assert!(tool.parameters["properties"].get("query").is_some());
+    let v = tool.parameters.as_value();
+    assert!(v["properties"].get("query").is_some());
     }
 
     #[test]
