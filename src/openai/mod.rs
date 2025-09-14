@@ -3,9 +3,7 @@
 pub mod worker;
 pub mod simple;
 pub mod call_tool;
-pub mod tool;
-pub mod tavily;
-pub mod docs_tool;
+pub mod tools; // consolidated tools (core, docs, tavily, constants)
 
 // 代表的な公開APIを再エクスポート
 pub use worker::start_openai_worker;
@@ -17,9 +15,19 @@ pub use call_tool::{
 	propose_tool_call,
 	propose_tool_call_blocking,
 	ToolCallDecision,
-    ToolResolution,
-    resolve_and_execute_tool_call,
+	ToolResolution,
+	resolve_and_execute_tool_call,
+	multi_step_tool_answer,
+	multi_step_tool_answer_blocking,
+	MultiStepAnswer,
 };
-pub use tool::{ToolDefinition, build_get_constants_tool};
-pub use docs_tool::build_read_doc_tool;
-pub use tavily::{build_tavily_search_tool, tavily_search};
+pub use tools::{
+	ToolDefinition,
+	ToolHandler,
+	ToolParameters,
+	ToolParametersBuilder,
+	build_get_constants_tool,
+	build_read_doc_tool,
+	build_tavily_search_tool,
+	tavily_search,
+};

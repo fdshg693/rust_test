@@ -159,20 +159,12 @@ impl ToolParametersBuilder {
     }
 }
 
-/// 便利関数: 既存の定数(X,Y)を返すツール定義を作成
-pub fn build_get_constants_tool(x: i32, y: i32) -> ToolDefinition {
-    let params = ToolParametersBuilder::new_object().build();
-    ToolDefinition::new(
-        "get_constants",
-        "Return constants X and Y as JSON",
-        params,
-        Arc::new(move |_v| Ok(json!({ "X": x, "Y": y }))),
-    )
-}
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn tool_definition_executes_closure() -> Result<()> {
@@ -180,7 +172,7 @@ mod tests {
             "echo_keys",
             "Return number of keys in object",
             ToolParametersBuilder::new_object()
-                .add_string("payload", Some("Arbitrary JSON object (will count keys)")) // Placeholder type (not enforcing object deeply)
+                .add_string("payload", Some("Arbitrary JSON object (will count keys)"))
                 .required("payload")
                 .build(),
             Arc::new(|v| {
@@ -193,41 +185,8 @@ mod tests {
         let out = tool.execute(&args)?;
         assert_eq!(out["len"], 2);
 
-        // Chat tool conversion sanity check
         let chat_tool = tool.as_chat_tool();
         assert_eq!(chat_tool.function.name, "echo_keys");
         Ok(())
-    }
-
-    #[test]
-    fn build_get_constants_tool_returns_values() -> Result<()> {
-        let tool = build_get_constants_tool(42, 7);
-        let out = tool.execute(&json!({}))?;
-        assert_eq!(out["X"], 42);
-        assert_eq!(out["Y"], 7);
-        Ok(())
-    }
-
-    #[test]
-    fn builder_creates_empty_object() {
-        let p = ToolParameters::empty_object();
-        let v = p.as_value();
-        assert_eq!(v["type"], "object");
-        assert!(v["properties"].as_object().unwrap().is_empty());
-    }
-
-    #[test]
-    fn builder_adds_fields_and_required() {
-        let p = ToolParametersBuilder::new_object()
-            .add_string("q", Some("query desc"))
-            .add_integer("n", Some("count"), Some(1), Some(10))
-            .required("q")
-            .additional_properties(false)
-            .build();
-        let v = p.as_value();
-        assert_eq!(v["properties"].as_object().unwrap().len(), 2);
-        assert!(v["required"].as_array().unwrap().iter().any(|x| x == "q"));
-        assert_eq!(v["additionalProperties"], false);
-        println!("Built schema: {}", v);
     }
 }

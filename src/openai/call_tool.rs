@@ -43,6 +43,15 @@ impl ToolResolution {
     }
 }
 
+/// マルチステップ実行結果: 途中の各ステップ(ツール解決)と最終回答テキスト
+#[derive(Debug, Clone)]
+pub struct MultiStepAnswer {
+    pub final_answer: String,
+    pub steps: Vec<ToolResolution>,
+    pub iterations: usize,
+    pub truncated: bool, // ループ上限で打ち切った場合 true
+}
+
 /// 非同期版: ツールを渡しても実行せず、モデルの提案だけ返す
 #[instrument(name = "propose_tool_call", skip(config, tools))]
 pub async fn propose_tool_call(
@@ -54,7 +63,7 @@ pub async fn propose_tool_call(
     let client = Client::new();
 
     let system = ChatCompletionRequestSystemMessageArgs::default()
-        .content("あなたは簡潔な日本語で答えるアシスタントです。利用可能なら関数を使うか検討しますが、ここでは実行しません。")
+        .content("あなたは簡潔な日本語で答えるアシスタントです。利用可能なら関数を使うか検討します。")
         .build()?;
     let user = ChatCompletionRequestUserMessageArgs::default()
         .content(prompt)
@@ -140,6 +149,107 @@ pub fn propose_tool_call_blocking(
 ) -> Result<ToolCallDecision> {
     let rt = Runtime::new()?;
     rt.block_on(propose_tool_call(prompt, tools, config))
+}
+
+/// `propose_tool_call` と `resolve_and_execute_tool_call` を組み合わせ、
+/// ツール呼び出し提案が行われなくなる (純テキスト応答になる) まで最大 N 回ループする。
+/// 返り値は最終テキスト回答と、途中で発生した各ステップ (`ToolResolution`) の履歴。
+///
+/// 方式:
+/// 1. 現在のプロンプト文字列に対して `propose_tool_call` を実行
+/// 2. ツール提案なら `resolve_and_execute_tool_call` で実行し、結果 JSON を次のプロンプトへ組み込み
+/// 3. テキストなら終了
+/// 4. ループ上限 (既定 5) 到達で打ち切り
+///
+/// 注意: シンプル実装のため会話履歴は system + 逐次構築した 1 本のユーザープロンプト文字列のみ。
+/// 真の Chat 履歴管理が必要になったら、`propose_tool_call` を汎用化して messages ベクタを受け取る形へ拡張すること。
+#[instrument(name = "multi_step_tool_answer", skip(tools, config))]
+pub async fn multi_step_tool_answer(
+    original_user_prompt: &str,
+    tools: &[ToolDefinition],
+    config: &Config,
+    max_loops: Option<usize>,
+) -> Result<MultiStepAnswer> {
+    let max_loops = max_loops.unwrap_or(5);
+    let mut steps: Vec<ToolResolution> = Vec::new();
+    let mut current_prompt = original_user_prompt.to_string();
+    let mut truncated = false;
+
+    for iteration in 1..=max_loops {
+        debug!(target: "openai", iteration, "multi_step_iteration_start");
+        let decision = propose_tool_call(&current_prompt, tools, config).await?;
+        match decision {
+            ToolCallDecision::Text(text) => {
+                debug!(target: "openai", iteration, "multi_step_text_final");
+                return Ok(MultiStepAnswer { final_answer: text, steps, iterations: iteration, truncated });
+            }
+            ToolCallDecision::ToolCall { name, arguments } => {
+                debug!(target: "openai", iteration, tool = %name, "multi_step_tool_call" );
+                let resolution = resolve_and_execute_tool_call(
+                    ToolCallDecision::ToolCall { name, arguments },
+                    tools,
+                );
+                let executed_json_for_next = match &resolution {
+                    ToolResolution::Executed { name, result } => {
+                        // result をインラインで埋め込む
+                        format!("ツール {name} の結果 JSON: {result}")
+                    }
+                    ToolResolution::ModelText(t) => format!("モデルテキスト: {t}"), // 通常ここには来ない想定
+                    ToolResolution::ToolNotFound { requested } => {
+                        format!("要求されたツール {requested} は存在しません。")
+                    }
+                    ToolResolution::ArgumentsParseError { name, raw, error } => {
+                        format!("ツール {name} の引数パース失敗: {error}. RAW: {raw}")
+                    }
+                    ToolResolution::ExecutionError { name, error } => {
+                        format!("ツール {name} 実行エラー: {error}")
+                    }
+                };
+                // 履歴 push
+                steps.push(resolution.clone());
+
+                // 失敗系ならここで最終回答化して終了
+                if !resolution.is_executed() {
+                    let final_answer = format!(
+                        "途中でツール実行に失敗したためここまでの情報で回答します。\n元の質問: {original_user_prompt}\n{executed_json_for_next}"
+                    );
+                    return Ok(MultiStepAnswer { final_answer, steps, iterations: iteration, truncated });
+                }
+
+                // 成功したので次のプロンプトを組み立てる
+                current_prompt = format!(
+                    concat!(
+                        "ユーザー最初の質問:\n{q}\n\n",
+                        "これまでに実行したツール結果一覧 (最新が下):\n",
+                        "{history}\n\n",
+                        "上記を踏まえて、必要なら更にツールを 1 つだけ提案してください。",
+                        "不要ならツール提案を行わず最終的な自然言語回答 (日本語) のみを返してください。"
+                    ),
+                    q = original_user_prompt,
+                    history = steps.iter().enumerate().map(|(i,s)| format!("[{}] {:?}", i+1, s)).collect::<Vec<_>>().join("\n"),
+                );
+            }
+        }
+    }
+
+    truncated = true; // ループ上限
+    let final_answer = format!(
+        "最大ループ回数({})に達したため打ち切りました。ここまでのツール結果を要約して回答してください。(実装側で要約はしていません)\n履歴: {:?}",
+        max_loops, steps
+    );
+    Ok(MultiStepAnswer { final_answer, steps, iterations: max_loops, truncated })
+}
+
+/// ブロッキング版 (同期): Tokio ランタイムを内部生成
+#[instrument(name = "multi_step_tool_answer_blocking", skip(tools, config))]
+pub fn multi_step_tool_answer_blocking(
+    original_user_prompt: &str,
+    tools: &[ToolDefinition],
+    config: &Config,
+    max_loops: Option<usize>,
+) -> Result<MultiStepAnswer> {
+    let rt = Runtime::new()?;
+    rt.block_on(multi_step_tool_answer(original_user_prompt, tools, config, max_loops))
 }
 
 #[cfg(test)]

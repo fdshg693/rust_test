@@ -1,5 +1,5 @@
 use rust_test::config::Config;
-use rust_test::openai::{propose_tool_call_blocking, ToolCallDecision, build_get_constants_tool, build_tavily_search_tool};
+use rust_test::openai::{propose_tool_call_blocking, ToolCallDecision};
 
 // Load .env before tests in this integration test binary
 #[ctor::ctor]
@@ -32,61 +32,3 @@ fn live_tool_call_none_tools_returns_text() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-/// Live test: provide a simple function tool; model may propose a tool call or reply with text
-#[test]
-#[ignore]
-fn live_tool_call_with_function() -> Result<(), Box<dyn std::error::Error>> {
-    if skip_if_no_api_key() { return Ok(()); }
-
-    // Use existing helper to build the tool definition
-    let tool_def = build_get_constants_tool(42, 7);
-
-    let cfg = Config::new();
-    let prompt = "定数XとYの現在値を取得したいです。必要なら get_constants を使ってください。";
-    let decision = propose_tool_call_blocking(prompt, &[tool_def], &cfg)?;
-    println!("Decision: {:?}", decision);
-
-    match decision {
-        ToolCallDecision::ToolCall { name, arguments } => {
-            assert_eq!(name, "get_constants");
-            // Arguments may be an empty object or something minimal; just ensure it's valid JSON-ish
-            assert!(
-                !arguments.trim().is_empty(),
-                "expected some arguments JSON (possibly {{}})"
-            );
-        }
-        ToolCallDecision::Text(t) => {
-            // Some models may answer directly without proposing a tool; allow it but require non-empty text
-            assert!(!t.trim().is_empty(), "expected non-empty text response");
-        }
-    }
-    Ok(())
-}
-
-#[test]
-#[ignore]
-fn live_tool_call_with_tavily_search() -> Result<(), Box<dyn std::error::Error>> {
-    if skip_if_no_api_key() { return Ok(()); }
-    if std::env::var("tavily_API_KEY").is_err() {
-        eprintln!("[skip] tavily_API_KEY not set; skipping live OpenAI test");
-        return Ok(());
-    }
-    let tool_def = build_tavily_search_tool();  
-    let cfg = Config::new();
-    let prompt = "東京の今日の天気を教えて";
-    let decision = propose_tool_call_blocking(prompt, &[tool_def], &cfg)?;
-    println!("Decision: {:?}", decision);
-    match decision {
-        ToolCallDecision::ToolCall { name, arguments } => {
-            assert_eq!(name, "tavily_search");
-            // Arguments should be valid JSON with at least a "query" key
-            let args_val: serde_json::Value = serde_json::from_str(&arguments)?;
-            assert!(args_val.get("query").is_some(), "expected 'query' in arguments");
-        }
-        ToolCallDecision::Text(t) => {
-            // Some models may answer directly without proposing a tool; allow it but require non-empty text
-            assert!(!t.trim().is_empty(), "expected non-empty text response");
-        }
-    }
-    Ok(())
-}

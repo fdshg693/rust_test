@@ -12,6 +12,7 @@ src/
 ├── config.rs        # 設定と定数
 ├── event.rs         # イベント処理
 ├── openai.rs        # OpenAI API統合
+├── sqlite/          # SQLite 仮想ファイルストレージユーティリティ
 └── ui.rs            # UI描画コンポーネント
 ```
 
@@ -49,6 +50,28 @@ src/
 - UI描画ロジック
 - Ratutuiを使用したコンポーネント描画
 - 画面レイアウトの管理
+
+### `sqlite/`
+- `rusqlite` を用いたシンプルな仮想ファイルストレージ
+- API: `Db::open_or_create`, `upsert_text`, `upsert_bytes`, `read_text`, `read_bytes`, `list_files`, `delete`, `import_file_from_fs`, `export_file_to_fs`
+- テーブル `files(path PRIMARY KEY, data BLOB, size_bytes INTEGER, modified_at_epoch_ms INTEGER)`
+
+#### 使用例
+```rust
+use rust_test::sqlite::Db;
+
+fn main() -> color_eyre::Result<()> {
+	color_eyre::install()?;
+	let mut db = Db::open_or_create("app_data.sqlite")?;
+	db.upsert_text("notes/hello.txt", "Hello SQLite")?;
+	let txt = db.read_text("notes/hello.txt")?;
+	println!("{}", txt);
+	for entry in db.list_files("notes/%")? {
+		println!("{} ({} bytes)", entry.path, entry.size_bytes);
+	}
+	Ok(())
+}
+```
 
 ## ベストプラクティスの適用
 
@@ -106,44 +129,3 @@ TAVILY API のレスポンス JSON をそのまま（あるいは `raw` / `error
 - ファイル: `src/openai/TAVILY.rs`
 - HTTPクライアント: `reqwest` (blocking) をワーカースレッドで同期利用
 - OpenAI との 2 ステップ: ツール提案 -> 実行 -> 関数結果を 2 度目の Chat Completion に投入
-
-### 拡張アイデア
-- 検索深度や日時フィルタなど追加パラメータをスキーマに露出
-- 非同期化 / キャッシュ
-- レスポンス要約を補助する追加ツール
-
-### 直接呼び出し
-アプリ内部やテストから直接 Web 検索を行いたい場合は関数を利用できます:
-
-```rust
-use rust_test::openai::TAVILY_search;
-
-let json = TAVILY_search("Rust programming language", 3)?;
-println!("{:?}", json);
-```
-
-### ツール提案と実行の簡略化ヘルパ
-
-`call_tool.rs` に `resolve_and_execute_tool_call` と結果列挙体 `ToolResolution` を追加し、
-ツール提案 (`ToolCallDecision`) から実行フェーズまでの典型処理を統一しました。
-
-```rust
-use rust_test::openai::{propose_tool_call, resolve_and_execute_tool_call, ToolResolution};
-
-// 1. ツール提案
-let decision = propose_tool_call("定数を教えて", &tools, &config).await?;
-// 2. 提案結果の解決 & 実行
-let resolution = resolve_and_execute_tool_call(decision, &tools);
-
-match resolution {
-	ToolResolution::ModelText(t) => println!("model text: {t}"),
-	ToolResolution::Executed { name, result } => println!("executed {name}: {result}"),
-	ToolResolution::ToolNotFound { requested } => eprintln!("tool not found: {requested}"),
-	ToolResolution::ArgumentsParseError { name, error, .. } => eprintln!("args parse error for {name}: {error}"),
-	ToolResolution::ExecutionError { name, error } => eprintln!("execution error for {name}: {error}"),
-}
-```
-
-`ToolResolution::Executed` の場合のみ 2 回目の Chat Completion を行い会話へ組み込む実装は
-`openai/worker.rs` を参照してください。
-

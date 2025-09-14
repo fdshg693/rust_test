@@ -1,5 +1,5 @@
 use rust_test::config::Config;
-use rust_test::openai::{propose_tool_call_blocking, ToolCallDecision, ToolResolution, build_tavily_search_tool, resolve_and_execute_tool_call};
+use rust_test::openai::{propose_tool_call_blocking, ToolResolution, build_tavily_search_tool, resolve_and_execute_tool_call};
 
 // Load .env before tests in this integration test binary
 #[ctor::ctor]
@@ -37,12 +37,11 @@ fn live_tool_call_with_tavily_search() -> Result<(), Box<dyn std::error::Error>>
                 return Ok(()); // treat as skipped
             }
             let answer_ok = result.get("answer").and_then(|v| v.as_str()).map(|s| !s.trim().is_empty()).unwrap_or(false);
-            let results_ok = result.get("results").and_then(|v| v.as_array()).map(|a| !a.is_empty()).unwrap_or(false);
-            if !(answer_ok || results_ok) {
+            if !(answer_ok) {
                 eprintln!("[skip] tavily_search JSON missing useful answer/results: {}", result);
                 return Ok(());
             }
-            println!("tavily_search JSON accepted (answer_ok={}, results_ok={}): {}", answer_ok, results_ok, result);
+            println!("tavily_search JSON accepted (answer_ok={}): {}", answer_ok, result);
         }
         ToolResolution::ModelText(t) => {
             // If the model returned text directly, just print it

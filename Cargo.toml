@@ -15,10 +15,12 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 tracing-appender = "0.2"
 dotenvy = "0.15"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "blocking"] }
+rusqlite = { version = "0.31", features = ["bundled", "blob"] }
 
 [dev-dependencies]
 ctor = "0.2"
 criterion = "0.4"
+tempfile = "3.10"
 
 [[bench]]
 name = "simple_bench"

@@ -4,7 +4,7 @@
 //! 現在は `call_tool` モジュールの `propose_tool_call` と `tool` モジュールの
 //! `ToolDefinition` を用いて 2 ステップ (提案→実行→最終回答) を実装する。
 
-use crate::config::{Config, X, Y};
+use crate::config::{Config};
 use crate::openai::{
     propose_tool_call,
     ToolResolution,
@@ -126,7 +126,6 @@ async fn process_prompt(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::openai::build_get_constants_tool;
     use serde_json::json;
 

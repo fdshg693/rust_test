@@ -5,9 +5,11 @@ pub mod config;
 pub mod event;
 pub mod openai;
 pub mod ui;
+pub mod sqlite; // SQLite utilities
 
 pub use app::App;
 pub use config::Config;
+pub use sqlite::Db;
 
 use color_eyre::Result;
 use crossterm::event::{self as crossterm_event, Event, KeyEventKind};
