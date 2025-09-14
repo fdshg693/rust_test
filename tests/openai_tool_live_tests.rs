@@ -1,14 +1,15 @@
 use rust_test::config::Config;
 use rust_test::openai::{propose_tool_call_blocking, ToolCallDecision};
+mod common;
 
 // Load .env before tests in this integration test binary
 #[ctor::ctor]
-fn _load_dotenv() { let _ = dotenvy::dotenv(); }
+fn _init() { common::init(); }
 
 // Helper: skip test when no API key
 fn skip_if_no_api_key() -> bool {
     if std::env::var("OPENAI_API_KEY").is_err() {
-        eprintln!("[skip] OPENAI_API_KEY not set; skipping live OpenAI test");
+        tracing::warn!(target="live_test", "[skip] OPENAI_API_KEY not set; skipping live OpenAI test");
         true
     } else { false }
 }
@@ -23,7 +24,7 @@ fn live_tool_call_none_tools_returns_text() -> Result<(), Box<dyn std::error::Er
     let prompt = "1+1は？短く答えて。";
     let empty: [rust_test::openai::ToolDefinition; 0] = [];
     let decision = propose_tool_call_blocking(prompt, &empty, &cfg)?;
-    println!("Decision: {:?}", decision);
+    tracing::info!(target="live_test", decision=?decision, "tool call decision");
 
     match decision {
         ToolCallDecision::Text(t) => assert!(!t.trim().is_empty(), "expected non-empty text"),

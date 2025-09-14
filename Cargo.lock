@@ -1755,6 +1755,7 @@ dependencies = [
  "crossterm",
  "ctor",
  "dotenvy",
+ "once_cell",
  "ratatui",
  "reqwest",
  "rusqlite",

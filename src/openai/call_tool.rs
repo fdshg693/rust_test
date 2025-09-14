@@ -10,6 +10,7 @@ use color_eyre::Result;
 use tokio::runtime::Runtime;
 use tracing::{info, debug, instrument};
 use serde_json::Value;
+use std::fmt::{self, Display};
 
 /// ツール（tools）を渡して、AIの「ツール呼び出し提案」または通常のテキスト回答を取得する（ツール実行はしない）
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,6 +41,37 @@ impl ToolResolution {
     /// 実行成功か判定用ヘルパ
     pub fn is_executed(&self) -> bool {
         matches!(self, ToolResolution::Executed { .. })
+    }
+}
+
+// ----- Display 実装 (ログで ?debug ではなく %display を使い、生の改行をそのまま出したい) -----
+impl Display for ToolCallDecision {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ToolCallDecision::Text(t) => write!(f, "Text(len={}):\n{}", t.len(), t),
+            ToolCallDecision::ToolCall { name, arguments } => {
+                write!(f, "ToolCall name={} args={} (len={})", name, arguments, arguments.len())
+            }
+        }
+    }
+}
+
+impl Display for ToolResolution {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ToolResolution::ModelText(t) => write!(f, "ModelText(len={}):\n{}", t.len(), t),
+            ToolResolution::Executed { name, result } => {
+                // result をコンパクト表示 (pretty にすると非常に長い行が増える可能性があるので JSON そのまま)
+                write!(f, "Executed name={} result={} (json)", name, result)
+            }
+            ToolResolution::ToolNotFound { requested } => write!(f, "ToolNotFound requested={}", requested),
+            ToolResolution::ArgumentsParseError { name, raw, error } => {
+                write!(f, "ArgumentsParseError name={} error={} raw={}", name, error, raw)
+            }
+            ToolResolution::ExecutionError { name, error } => {
+                write!(f, "ExecutionError name={} error={}", name, error)
+            }
+        }
     }
 }
 
@@ -222,11 +254,9 @@ pub async fn multi_step_tool_answer(
                         "ユーザー最初の質問:\n{q}\n\n",
                         "これまでに実行したツール結果一覧 (最新が下):\n",
                         "{history}\n\n",
-                        "上記を踏まえて、必要なら更にツールを 1 つだけ提案してください。",
-                        "不要ならツール提案を行わず最終的な自然言語回答 (日本語) のみを返してください。"
                     ),
                     q = original_user_prompt,
-                    history = steps.iter().enumerate().map(|(i,s)| format!("[{}] {:?}", i+1, s)).collect::<Vec<_>>().join("\n"),
+                    history = steps.iter().enumerate().map(|(i,s)| format!("[{}] {}", i+1, s)).collect::<Vec<_>>().join("\n"),
                 );
             }
         }
@@ -234,8 +264,8 @@ pub async fn multi_step_tool_answer(
 
     truncated = true; // ループ上限
     let final_answer = format!(
-        "最大ループ回数({})に達したため打ち切りました。ここまでのツール結果を要約して回答してください。(実装側で要約はしていません)\n履歴: {:?}",
-        max_loops, steps
+        "最大ループ回数({})に達したため打ち切りました。ここまでのツール結果を要約して回答してください。(実装側で要約はしていません)\n履歴:\n{}",
+        max_loops, steps.iter().enumerate().map(|(i,s)| format!("[{}] {}", i+1, s)).collect::<Vec<_>>().join("\n")
     );
     Ok(MultiStepAnswer { final_answer, steps, iterations: max_loops, truncated })
 }

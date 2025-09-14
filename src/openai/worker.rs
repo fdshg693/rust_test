@@ -65,7 +65,8 @@ async fn process_prompt(
             return format!("APIエラー(提案): {e}");
         }
     };
-    debug!(target: "openai", ?decision, "tool_call_decision");
+    // Display 実装を用いて改行をエスケープせず出力
+    debug!(target: "openai", decision = %decision, "tool_call_decision");
 
     // 3. system/user メッセージを再構築（propose_tool_call 内と同様の方針で統一）
     let system = ChatCompletionRequestSystemMessageArgs::default()
@@ -80,7 +81,7 @@ async fn process_prompt(
     };
 
     let resolution = resolve_and_execute_tool_call(decision, &tools_defs);
-    debug!(target: "openai", ?resolution, "tool_resolution");
+    debug!(target: "openai", resolution = %resolution, "tool_resolution");
     match resolution {
         ToolResolution::ModelText(t) => t,
         ToolResolution::ToolNotFound { requested } => format!("未知のツール要求: {requested}"),

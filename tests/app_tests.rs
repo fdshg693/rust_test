@@ -1,8 +1,8 @@
 use std::sync::mpsc::{channel, Sender, Receiver};
 
-// Load .env before tests in this integration test binary
+mod common;
 #[ctor::ctor]
-fn _load_dotenv() { let _ = dotenvy::dotenv(); }
+fn _init() { common::init(); }
 
 /// A minimal app-like struct to test state transitions without spawning the OpenAI worker.
 struct TestApp {

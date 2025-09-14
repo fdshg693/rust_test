@@ -1,8 +1,8 @@
 use rust_test::config::{Config, X, Y};
+mod common;
 
-// Load .env before tests in this integration test binary
 #[ctor::ctor]
-fn _load_dotenv() { let _ = dotenvy::dotenv(); }
+fn _init() { common::init(); }
 
 #[test]
 fn config_defaults() {

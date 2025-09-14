@@ -1,10 +1,14 @@
 use std::fs;
 use color_eyre::Result;
 use rust_test::sqlite::Db;
+mod common;
 
 fn temp_dir() -> Result<tempfile::TempDir> {
     Ok(tempfile::tempdir()?)
 }
+
+#[ctor::ctor]
+fn _init() { common::init(); }
 
 #[test]
 fn text_read_write_cycle() -> Result<()> {

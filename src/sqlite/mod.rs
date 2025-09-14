@@ -15,7 +15,7 @@
 //! use rust_test::sqlite::{Db, FileEntry};
 //!
 //! # fn demo() -> color_eyre::Result<()> {
-//! let db = Db::open_or_create("app_data.sqlite")?; // ファイルが無ければ作成
+//! let mut db = Db::open_or_create("app_data.sqlite")?; // ファイルが無ければ作成 (&mut 必要)
 //! db.upsert_text("notes/hello.txt", "こんにちは")?;
 //! let content = db.read_text("notes/hello.txt")?;
 //! println!("{}", content); // => こんにちは
