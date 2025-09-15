@@ -58,7 +58,8 @@ async fn process_prompt(
         build_tavily_search_tool(),
     ];
     // 2. ツール呼び出し提案フェーズ（ToolDefinition のスライスを直接渡す）
-    let decision = match propose_tool_call(prompt, &tools_defs, config).await {
+    // 履歴をまだ保持していない既存実装のため空スライスを渡す
+    let decision = match propose_tool_call(&[], prompt, &tools_defs, config).await {
         Ok(d) => d,
         Err(e) => {
             error!(target: "openai", "propose_tool_call_error: {e}");

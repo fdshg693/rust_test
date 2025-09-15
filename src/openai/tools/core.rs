@@ -137,6 +137,11 @@ impl ToolParametersBuilder {
         self
     }
 
+    /// Integer without bounds helper (min/max omitted)
+    pub fn add_integer_unbounded(self, name: &str, description: Option<&str>) -> Self {
+        self.add_integer(name, description, None, None)
+    }
+
     pub fn required(mut self, name: &str) -> Self {
         if !self.required.iter().any(|r| r == name) { self.required.push(name.to_string()); }
         self

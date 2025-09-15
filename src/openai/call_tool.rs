@@ -3,8 +3,10 @@ use crate::openai::ToolDefinition; // 引数型を ToolDefinition に変更
 use async_openai::types::{
     ChatCompletionRequestSystemMessageArgs,
     ChatCompletionRequestUserMessageArgs,
+    ChatCompletionRequestMessage,
     CreateChatCompletionRequestArgs,
 };
+use crate::openai::ConversationHistory;
 use async_openai::Client;
 use color_eyre::Result;
 use tokio::runtime::Runtime;
@@ -84,18 +86,71 @@ pub struct MultiStepAnswer {
     pub truncated: bool, // ループ上限で打ち切った場合 true
 }
 
-/// 非同期版: ツールを渡しても実行せず、モデルの提案だけ返す
-#[instrument(name = "propose_tool_call", skip(config, tools))]
+/// マルチステップ内部の進行状況を外部（テスト等）に通知するためのイベント
+#[derive(Debug, Clone)]
+pub enum MultiStepLogEvent {
+    /// 各イテレーション開始
+    IterationStart { iteration: usize },
+    /// モデルのツール提案 or テキスト決定
+    Proposed { iteration: usize, decision: ToolCallDecision },
+    /// ツール解決（実行/失敗/テキスト委譲）
+    Resolved { iteration: usize, resolution: ToolResolution },
+    /// function メッセージを履歴に追加（成功時のみ）
+    HistoryFunctionAppended { iteration: usize, name: String, result: Value },
+    /// テキスト最終化
+    FinalText { iteration: usize, text: String },
+    /// 途中失敗により打ち切り
+    EarlyFailure { iteration: usize, resolution: ToolResolution },
+    /// ループ上限到達
+    Truncated { max_loops: usize },
+}
+
+impl Display for MultiStepLogEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MultiStepLogEvent::IterationStart { iteration } => write!(f, "IterationStart #{}", iteration),
+            MultiStepLogEvent::Proposed { iteration, decision } => write!(f, "Proposed @{} => {}", iteration, decision),
+            MultiStepLogEvent::Resolved { iteration, resolution } => write!(f, "Resolved @{} => {}", iteration, resolution),
+            MultiStepLogEvent::HistoryFunctionAppended { iteration, name, result } => write!(f, "HistoryFunctionAppended @{} name={} result={}", iteration, name, result),
+            MultiStepLogEvent::FinalText { iteration, text } => write!(f, "FinalText @{} len={}", iteration, text.len()),
+            MultiStepLogEvent::EarlyFailure { iteration, resolution } => write!(f, "EarlyFailure @{} => {}", iteration, resolution),
+            MultiStepLogEvent::Truncated { max_loops } => write!(f, "Truncated after {} loops", max_loops),
+        }
+    }
+}
+
+/// 非同期版: ツールを渡しても実行せず、モデルのツール呼び出し提案 (function calling) またはテキスト回答を 1 回取得する。
+///
+/// # 引数
+/// * `history` - 直近の会話履歴 (system を含めない)。`ChatCompletionRequestMessage` は
+///   async-openai が提供する enum で user/assistant/function 等を表現できる。ここに積んだ順番は
+///   そのまま送信順になる。空スライスなら「新規会話」とみなされる。
+/// * `prompt`  - 今回ユーザーが追加で入力したい内容。内部で user メッセージとして末尾に 1 件追加される。
+/// * `tools`   - 利用可能なツール定義一覧。
+/// * `config`  - モデル名や max_tokens 等の設定。
+///
+/// # System メッセージ
+/// 関数内部で定型の system メッセージを先頭に 1 件だけ追加する。`history` に system を重ねると二重になるため
+/// 含めない運用とする (必要なら将来引数で system を差し替える拡張を検討)。
+///
+/// # 互換性
+/// 以前は `(prompt, tools, config)` だけ受け取っていたが、会話文脈を保持するため `history` を先頭に追加した。
+/// 既存呼び出しは `&[]` を与えれば従来と同じ挙動になる。
+///
+/// # 補助構造体
+/// 頻繁に履歴を構築する場合は `ConversationHistory` ( `openai::ConversationHistory` ) を利用して
+/// `history.as_slice()` もしくは `propose_tool_call_with_history_vec` で呼び出すと便利。
+#[instrument(name = "propose_tool_call", skip(config, tools, history), fields(history_len = history.len()))]
 pub async fn propose_tool_call(
+    history: &[ChatCompletionRequestMessage],
     prompt: &str,
     tools: &[ToolDefinition],
     config: &Config,
-)
--> Result<ToolCallDecision> {
+) -> Result<ToolCallDecision> {
     let client = Client::new();
 
     let system = ChatCompletionRequestSystemMessageArgs::default()
-        .content("あなたは簡潔な日本語で答えるアシスタントです。利用可能なら関数を使うか検討します。")
+        .content("あなたは簡潔な日本語で答えるアシスタントです。")
         .build()?;
     let user = ChatCompletionRequestUserMessageArgs::default()
         .content(prompt)
@@ -104,9 +159,15 @@ pub async fn propose_tool_call(
     // ToolDefinition から ChatCompletionTool へ変換
     let tools_for_api: Vec<_> = tools.iter().map(|t| t.as_chat_tool()).collect();
 
+    // メッセージ組み立て: system + history + current user
+    let mut messages: Vec<ChatCompletionRequestMessage> = Vec::with_capacity(1 + history.len() + 1);
+    messages.push(system.into());
+    messages.extend_from_slice(history);
+    messages.push(user.into());
+
     let req = CreateChatCompletionRequestArgs::default()
         .model(&config.model)
-        .messages([system.into(), user.into()])
+        .messages(messages)
         .tools(tools_for_api)
         .tool_choice("auto")
         .max_tokens(config.max_tokens)
@@ -135,6 +196,17 @@ pub async fn propose_tool_call(
         .clone()
         .unwrap_or_else(|| "(空の応答)".to_string());
     Ok(ToolCallDecision::Text(text))
+}
+
+/// Vec<ChatCompletionRequestMessage> をそのまま渡したい場合の薄いシンタックスシュガー。
+/// 参照をスライスに変換して `propose_tool_call` を呼ぶだけ。
+pub async fn propose_tool_call_with_history_vec(
+    history_vec: &Vec<ChatCompletionRequestMessage>,
+    prompt: &str,
+    tools: &[ToolDefinition],
+    config: &Config,
+) -> Result<ToolCallDecision> {
+    propose_tool_call(history_vec.as_slice(), prompt, tools, config).await
 }
 
 /// 与えられた `ToolCallDecision` を利用可能な `ToolDefinition` の集合に対して解決し、
@@ -173,28 +245,31 @@ pub fn resolve_and_execute_tool_call(
 }
 
 /// ブロッキング版: ランタイムを内部で作って同期的に実行
-#[instrument(name = "propose_tool_call_blocking", skip(config, tools))]
+#[instrument(name = "propose_tool_call_blocking", skip(config, tools, history))]
 pub fn propose_tool_call_blocking(
+    history: &[ChatCompletionRequestMessage],
     prompt: &str,
     tools: &[ToolDefinition],
     config: &Config,
 ) -> Result<ToolCallDecision> {
     let rt = Runtime::new()?;
-    rt.block_on(propose_tool_call(prompt, tools, config))
+    rt.block_on(propose_tool_call(history, prompt, tools, config))
 }
 
 /// `propose_tool_call` と `resolve_and_execute_tool_call` を組み合わせ、
-/// ツール呼び出し提案が行われなくなる (純テキスト応答になる) まで最大 N 回ループする。
-/// 返り値は最終テキスト回答と、途中で発生した各ステップ (`ToolResolution`) の履歴。
+/// モデルがツール呼び出しを提案しなくなる (テキスト回答を返す) まで最大 N 回ループする。
+/// 返り値は最終テキスト回答と途中ステップ (`ToolResolution`) の履歴。
 ///
-/// 方式:
-/// 1. 現在のプロンプト文字列に対して `propose_tool_call` を実行
-/// 2. ツール提案なら `resolve_and_execute_tool_call` で実行し、結果 JSON を次のプロンプトへ組み込み
-/// 3. テキストなら終了
-/// 4. ループ上限 (既定 5) 到達で打ち切り
+/// # 新実装 (ConversationHistory ベース)
+/// 以前は単一の巨大 user プロンプト文字列を毎回再構築していたが、
+/// 今回 `ConversationHistory` (system を除く履歴) を使い、
+/// 1. 最初に user: original_user_prompt
+/// 2. 各ツール実行成功後に function メッセージを append (name=resultJSON)
+/// 3. 次 iteration では history + （必要なら追加の user 補助プロンプトなしで）再度提案を呼ぶ
+/// とする。モデルは function messages を見て再度ツールが必要か判断する。
 ///
-/// 注意: シンプル実装のため会話履歴は system + 逐次構築した 1 本のユーザープロンプト文字列のみ。
-/// 真の Chat 履歴管理が必要になったら、`propose_tool_call` を汎用化して messages ベクタを受け取る形へ拡張すること。
+/// 補足: 失敗系 (ToolNotFound, ArgumentsParseError, ExecutionError) は即終了し、暫定回答を構築。
+/// function message の content はそのまま JSON 文字列 (短縮/要約なし)。
 #[instrument(name = "multi_step_tool_answer", skip(tools, config))]
 pub async fn multi_step_tool_answer(
     original_user_prompt: &str,
@@ -202,17 +277,65 @@ pub async fn multi_step_tool_answer(
     config: &Config,
     max_loops: Option<usize>,
 ) -> Result<MultiStepAnswer> {
+    multi_step_tool_answer_with_logger_internal(
+        original_user_prompt,
+        tools,
+        config,
+        max_loops,
+        None,
+    ).await
+}
+
+/// ロガー（コールバック）を指定可能な拡張版
+#[instrument(name = "multi_step_tool_answer_with_logger", skip(tools, config, logger))]
+pub async fn multi_step_tool_answer_with_logger(
+    original_user_prompt: &str,
+    tools: &[ToolDefinition],
+    config: &Config,
+    max_loops: Option<usize>,
+    logger: impl FnMut(&MultiStepLogEvent),
+) -> Result<MultiStepAnswer> {
+    // ユーザーのロガーに加えて tracing にも流す
+    let mut user_logger = logger;
+    let mut log_and_forward = |ev: &MultiStepLogEvent| {
+        debug!(target: "openai", event = %ev, "multi_step_event");
+        user_logger(ev);
+    };
+    // `dyn FnMut` への可変参照を一時変数に保持してライフタイムを安定化
+    let mut opt_logger: Option<&mut dyn FnMut(&MultiStepLogEvent)> = Some(&mut log_and_forward);
+    multi_step_tool_answer_with_logger_internal(
+        original_user_prompt,
+        tools,
+        config,
+        max_loops,
+        opt_logger.as_deref_mut(),
+    ).await
+}
+
+// 内部共通実装（logger を Option で受ける）
+async fn multi_step_tool_answer_with_logger_internal(
+    original_user_prompt: &str,
+    tools: &[ToolDefinition],
+    config: &Config,
+    max_loops: Option<usize>,
+    mut logger: Option<&mut dyn FnMut(&MultiStepLogEvent)>,
+) -> Result<MultiStepAnswer> {
     let max_loops = max_loops.unwrap_or(5);
     let mut steps: Vec<ToolResolution> = Vec::new();
-    let mut current_prompt = original_user_prompt.to_string();
     let mut truncated = false;
+    let mut history = ConversationHistory::new();
+    history.add_user(original_user_prompt);
 
     for iteration in 1..=max_loops {
         debug!(target: "openai", iteration, "multi_step_iteration_start");
-        let decision = propose_tool_call(&current_prompt, tools, config).await?;
+        if let Some(cb) = logger.as_deref_mut() { cb(&MultiStepLogEvent::IterationStart { iteration }); }
+        // 会話履歴 (system 除く) をそのまま用いてツール提案
+        let decision = propose_tool_call(history.as_slice(), "", tools, config).await?; // 今回の追加 user 発話は空 (新情報なし)
+        if let Some(cb) = logger.as_deref_mut() { cb(&MultiStepLogEvent::Proposed { iteration, decision: decision.clone() }); }
         match decision {
             ToolCallDecision::Text(text) => {
                 debug!(target: "openai", iteration, "multi_step_text_final");
+                if let Some(cb) = logger.as_deref_mut() { cb(&MultiStepLogEvent::FinalText { iteration, text: text.clone() }); }
                 return Ok(MultiStepAnswer { final_answer: text, steps, iterations: iteration, truncated });
             }
             ToolCallDecision::ToolCall { name, arguments } => {
@@ -221,6 +344,7 @@ pub async fn multi_step_tool_answer(
                     ToolCallDecision::ToolCall { name, arguments },
                     tools,
                 );
+                if let Some(cb) = logger.as_deref_mut() { cb(&MultiStepLogEvent::Resolved { iteration, resolution: resolution.clone() }); }
                 let executed_json_for_next = match &resolution {
                     ToolResolution::Executed { name, result } => {
                         // result をインラインで埋め込む
@@ -242,30 +366,27 @@ pub async fn multi_step_tool_answer(
 
                 // 失敗系ならここで最終回答化して終了
                 if !resolution.is_executed() {
+                    if let Some(cb) = logger.as_deref_mut() { cb(&MultiStepLogEvent::EarlyFailure { iteration, resolution: resolution.clone() }); }
                     let final_answer = format!(
                         "途中でツール実行に失敗したためここまでの情報で回答します。\n元の質問: {original_user_prompt}\n{executed_json_for_next}"
                     );
                     return Ok(MultiStepAnswer { final_answer, steps, iterations: iteration, truncated });
                 }
 
-                // 成功したので次のプロンプトを組み立てる
-                current_prompt = format!(
-                    concat!(
-                        "ユーザー最初の質問:\n{q}\n\n",
-                        "これまでに実行したツール結果一覧 (最新が下):\n",
-                        "{history}\n\n",
-                    ),
-                    q = original_user_prompt,
-                    history = steps.iter().enumerate().map(|(i,s)| format!("[{}] {}", i+1, s)).collect::<Vec<_>>().join("\n"),
-                );
+                // ツール成功結果を function メッセージとして履歴に追加
+                if let ToolResolution::Executed { name, result } = &resolution {
+                    history.add_function(name, result.to_string());
+                    if let Some(cb) = logger.as_deref_mut() { cb(&MultiStepLogEvent::HistoryFunctionAppended { iteration, name: name.clone(), result: result.clone() }); }
+                }
             }
         }
     }
 
     truncated = true; // ループ上限
+    if let Some(cb) = logger.as_deref_mut() { cb(&MultiStepLogEvent::Truncated { max_loops }); }
     let final_answer = format!(
-        "最大ループ回数({})に達したため打ち切りました。ここまでのツール結果を要約して回答してください。(実装側で要約はしていません)\n履歴:\n{}",
-        max_loops, steps.iter().enumerate().map(|(i,s)| format!("[{}] {}", i+1, s)).collect::<Vec<_>>().join("\n")
+        "最大ループ回数({})に達したため打ち切りました。これまでの function 結果(JSON)を参考に最終回答をまとめてください。",
+        max_loops
     );
     Ok(MultiStepAnswer { final_answer, steps, iterations: max_loops, truncated })
 }
@@ -280,6 +401,42 @@ pub fn multi_step_tool_answer_blocking(
 ) -> Result<MultiStepAnswer> {
     let rt = Runtime::new()?;
     rt.block_on(multi_step_tool_answer(original_user_prompt, tools, config, max_loops))
+}
+
+/// ブロッキング版（ロガー付き）
+#[instrument(name = "multi_step_tool_answer_blocking_with_logger", skip(tools, config, logger))]
+pub fn multi_step_tool_answer_blocking_with_logger(
+    original_user_prompt: &str,
+    tools: &[ToolDefinition],
+    config: &Config,
+    max_loops: Option<usize>,
+    logger: impl FnMut(&MultiStepLogEvent),
+) -> Result<MultiStepAnswer> {
+    // 開始ログ（既存スタイルに合わせて target:"openai"）
+    let max_loops_val = max_loops.unwrap_or(5);
+    info!(target: "openai", model = %config.model, max_tokens = config.max_tokens, max_loops = max_loops_val, "multi_step_blocking_request");
+
+    // ユーザーのロガーに加えて、tracing にもイベントを流すアダプタを用意
+    let mut user_logger = logger;
+    let mut log_and_forward = |ev: &MultiStepLogEvent| {
+        // 文字列表現は Display 実装を利用
+        debug!(target: "openai", event = %ev, "multi_step_event");
+        user_logger(ev);
+    };
+
+    let mut opt_logger: Option<&mut dyn FnMut(&MultiStepLogEvent)> = Some(&mut log_and_forward);
+    let rt = Runtime::new()?;
+    let result = rt.block_on(multi_step_tool_answer_with_logger_internal(
+        original_user_prompt,
+        tools,
+        config,
+        max_loops,
+        opt_logger.as_deref_mut(),
+    ))?;
+
+    // 終了ログ
+    info!(target: "openai", iterations = result.iterations, truncated = result.truncated, steps = result.steps.len(), final_len = result.final_answer.len(), "multi_step_blocking_done");
+    Ok(result)
 }
 
 #[cfg(test)]

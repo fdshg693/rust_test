@@ -1,5 +1,5 @@
-use rust_test::config::Config;
-use rust_test::openai::{multi_step_tool_answer_blocking, build_read_doc_tool, ToolResolution};
+use rust_test::config::{Config, X, Y};
+use rust_test::openai::{multi_step_tool_answer_blocking_with_logger, build_get_constants_tool, build_add_tool, ToolResolution};
 mod common;
 
 // Load .env before tests in this integration test binary
@@ -14,54 +14,54 @@ fn skip_if_no_api_key() -> bool {
     } else { false }
 }
 
-/// Live multi-step function calling test:
-/// Instruct the model to consult both benches.md and examples.md via the read_docs_file tool
-/// and then provide a consolidated Japanese summary referencing benchmark usage and examples guidance.
+/// Live multi-step function calling test (sample tools):
+/// Use two tools from `sample_tools` to compute X+Y.
+/// Flow:
+/// 1) Model calls `get_constants` to retrieve `{ X, Y }` (provided by config constants)
+/// 2) Model calls `add` with those numbers to compute the sum
+/// 3) Model returns a concise Japanese explanation including the result
 /// Ignored by default. Run with: `cargo test --test multi_step_read_docs_live_test -- --ignored`
 #[test]
 #[ignore]
-fn live_multi_step_reads_two_docs() -> Result<(), Box<dyn std::error::Error>> {
+fn live_multi_step_calculates_x_plus_y() -> Result<(), Box<dyn std::error::Error>> {
     if skip_if_no_api_key() { return Ok(()); }
 
     let cfg = Config::new();
-    let tool = build_read_doc_tool();
+    let tools = vec![
+        build_get_constants_tool(X, Y),
+        build_add_tool(),
+    ];
 
-    // Prompt asks explicitly for content from both files to push the model into 2 tool calls.
-    let prompt = "`benches.md` と `examples.md` の両方を読み、それぞれの重要ポイントを日本語で1文に要約してください。";
+    // Instruct model to fetch constants, then add them using tools, and answer in Japanese.
+    let prompt = "提供されているツールだけを使い、まず定数 X と Y を取得し、その後それらを足し算して結果を日本語で簡潔に答えてください。";
 
-    let answer = multi_step_tool_answer_blocking(prompt, &[tool], &cfg, Some(4))?; // allow a few loops
-    tracing::info!(target="live_test", final_answer=%answer.final_answer, iterations=answer.iterations, truncated=answer.truncated, steps=?answer.steps, "multi-step doc read completed");
+    let answer = multi_step_tool_answer_blocking_with_logger(prompt, &tools, &cfg, Some(4), |ev| {
+        tracing::info!(target="live_test", event=%ev, "multi_step_event");
+    })?; // allow a few loops
+    tracing::info!(target="live_test", final_answer=%answer.final_answer, iterations=answer.iterations, truncated=answer.truncated, steps=?answer.steps, "multi-step X+Y completed");
 
     // Basic sanity: final answer not empty
     assert!(!answer.final_answer.trim().is_empty(), "final answer should not be empty");
 
-    // We expect at least one executed tool step; ideally two (one per file). The model may choose to fetch
-    // them in any order or even merge into one, but we enforce at least one successful execution.
+    // We expect at least one executed tool step; ideally two (get_constants then add). The model may choose a different order.
     let executed: Vec<&ToolResolution> = answer.steps.iter().filter(|s| matches!(s, ToolResolution::Executed { .. })).collect();
     assert!(!executed.is_empty(), "expected at least one executed tool step");
 
-    // Collect filenames actually read
-    let mut filenames = vec![];
-    for s in &executed {
-        if let ToolResolution::Executed { result, .. } = s {
-            if let Some(fname) = result.get("filename").and_then(|v| v.as_str()) { filenames.push(fname.to_string()); }
-        }
+    // Check that the executed steps include our expected tools
+    let used_get_constants = answer.steps.iter().any(|s| matches!(s, ToolResolution::Executed { name, .. } if name == "get_constants"));
+    let used_add = answer.steps.iter().any(|s| matches!(s, ToolResolution::Executed { name, .. } if name == "add"));
+    if !(used_get_constants && used_add) {
+        tracing::info!(target="live_test", get_constants=used_get_constants, add=used_add, steps=?answer.steps, "model did not execute both tools");
     }
 
-    // If both were read, great; if not, just print a note (don't fail hard because model autonomy varies)
-    let has_benches = filenames.iter().any(|f| f == "benches.md");
-    let has_examples = filenames.iter().any(|f| f == "examples.md");
-    if !(has_benches && has_examples) {
-    tracing::info!(target="live_test", benches=has_benches, examples=has_examples, fetched=?filenames, "model did not fetch both target docs");
-    }
+    // Assert that at least one of them ran
+    assert!(used_get_constants || used_add, "expected at least one of get_constants or add to be executed");
 
-    // Still, assert that at least one of the target docs was fetched
-    assert!(has_benches || has_examples, "expected at least one of benches.md or examples.md to be fetched");
-
-    // Light content heuristic: mention of 'ベンチ' or 'bench' and 'example' or 'examples'
-    let ans_lower = answer.final_answer.to_lowercase();
-    assert!(ans_lower.contains("bench") || answer.final_answer.contains("ベンチ"), "final answer should mention benches");
-    assert!(ans_lower.contains("example") || ans_lower.contains("examples"), "final answer should mention examples");
+    // Heuristic: final answer should mention the computed sum
+    let sum = (X + Y) as i64; // sums in JSON are i64 in our tool
+    let ans = answer.final_answer.replace(',', ""); // tolerate commas
+    let sum_str = sum.to_string();
+    assert!(ans.contains(&sum_str) || ans.contains("合計") || ans.contains("足し算") || ans.contains("和"), "final answer should likely include the sum or mention an addition");
 
     Ok(())
 }

@@ -23,7 +23,8 @@ fn live_tool_call_none_tools_returns_text() -> Result<(), Box<dyn std::error::Er
     let cfg = Config::new();
     let prompt = "1+1は？短く答えて。";
     let empty: [rust_test::openai::ToolDefinition; 0] = [];
-    let decision = propose_tool_call_blocking(prompt, &empty, &cfg)?;
+    let history: [async_openai::types::ChatCompletionRequestMessage; 0] = [];
+    let decision = propose_tool_call_blocking(&history, prompt, &empty, &cfg)?;
     tracing::info!(target="live_test", decision=?decision, "tool call decision");
 
     match decision {

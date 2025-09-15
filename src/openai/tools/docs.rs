@@ -2,48 +2,78 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 use crate::openai::tools::{ToolDefinition, ToolParametersBuilder};
 
-/// docs フォルダ内の特定 Markdown ファイル内容を返すツール。
-/// セキュリティのため列挙されたファイル名のみ許可し、パストラバーサルを防止する。
-/// 返却形式: { "filename": string, "content": string, ("truncated": bool)? } もしくは { "error": string }
+/// docs フォルダ配下（サブフォルダ含む）の Markdown / テキストを返すツール。
+/// - 入力は `path`（docs からの相対パス）。例: "benches.md", "guides/intro.md"
+/// - `.md` と `.txt` のみ許可。
+/// - `std::fs::canonicalize` でパストラバーサルを防止し、`docs` 配下であることを検証。
+/// 返却形式: { "path": string, "filename": string, "content": string, ("truncated": bool)? } または { "error": string }
 pub fn build_read_doc_tool() -> ToolDefinition {
-    const ALLOWED: [&str; 4] = [
-        "benches.md",
-        "examples.md",
-        "ratatui.md",
-        "test.md",
-    ];
     let parameters = ToolParametersBuilder::new_object()
-        .add_string_enum("filename", Some("Target docs file name (one of benches.md, examples.md, ratatui.md, test.md)"), &ALLOWED)
-        .required("filename")
+        .add_string("path", Some("Relative path under docs/ to a .md or .txt file (subfolders allowed)"))
+        .required("path")
         .additional_properties(false)
         .build();
 
     ToolDefinition::new(
         "read_docs_file",
-        "Read a markdown file from the local docs directory and return its text content.",
+        "Read a .md or .txt file from the local docs directory (including subfolders) and return its text content.",
         parameters,
-        Arc::new(move |args: &Value| read_docs_file_impl(args, &ALLOWED))
+        Arc::new(move |args: &Value| read_docs_file_impl(args))
     )
 }
 
 /// Implementation separated from the closure to allow easier testing / reuse.
-fn read_docs_file_impl(args: &Value, allowed: &[&str]) -> color_eyre::Result<Value> {
+fn read_docs_file_impl(args: &Value) -> color_eyre::Result<Value> {
+    use std::path::{Path, PathBuf};
     const MAX_BYTES: usize = 16 * 1024; // 16KB safety limit
-    let filename = match args.get("filename").and_then(|v| v.as_str()) {
-        Some(f) => f,
-        None => return Ok(json!({"error": "filename is required"})),
+
+    // 1) Parse input path
+    let rel_path_str = match args.get("path").and_then(|v| v.as_str()) {
+        Some(p) if !p.trim().is_empty() => p,
+        _ => return Ok(json!({"error": "path is required"})),
     };
-    if !allowed.contains(&filename) {
-        return Ok(json!({"error": format!("filename not allowed: {filename}")}));
+
+    // 2) Reject absolute paths early
+    let rel_path = Path::new(rel_path_str);
+    if rel_path.is_absolute() {
+        return Ok(json!({"error": "absolute path not allowed"}));
     }
-    if filename.contains('/') || filename.contains('\\') { // extra defense
-        return Ok(json!({"error": "invalid filename"}));
+
+    // 3) Build candidate under docs and canonicalize
+    let docs_root = Path::new("docs");
+    let candidate: PathBuf = docs_root.join(rel_path);
+    let docs_root_canon = match std::fs::canonicalize(docs_root) {
+        Ok(p) => p,
+        Err(e) => return Ok(json!({"error": format!("docs root not found: {e}")})),
+    };
+    let candidate_canon = match std::fs::canonicalize(&candidate) {
+        Ok(p) => p,
+        Err(e) => return Ok(json!({"error": format!("file not found: {e}")})),
+    };
+
+    // 4) Ensure candidate stays within docs root
+    if !candidate_canon.starts_with(&docs_root_canon) {
+        return Ok(json!({"error": "path escapes docs root"}));
     }
-    let path = std::path::Path::new("docs").join(filename);
-    let content = match std::fs::read_to_string(&path) {
+
+    // 5) Allow only .md or .txt
+    let allowed_ext = ["md", "markdown", "txt"]; // allow a couple of markdown variants
+    let ext_ok = candidate_canon
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| allowed_ext.contains(&e.to_ascii_lowercase().as_str()))
+        .unwrap_or(false);
+    if !ext_ok {
+        return Ok(json!({"error": "unsupported extension (allowed: .md, .markdown, .txt)"}));
+    }
+
+    // 6) Read file content
+    let content = match std::fs::read_to_string(&candidate_canon) {
         Ok(c) => c,
         Err(e) => return Ok(json!({"error": format!("read error: {e}")})),
     };
+
+    // 7) Truncate if needed
     let mut truncated = false;
     let output = if content.len() > MAX_BYTES {
         truncated = true;
@@ -51,15 +81,20 @@ fn read_docs_file_impl(args: &Value, allowed: &[&str]) -> color_eyre::Result<Val
         s.truncate(MAX_BYTES);
         s
     } else { content };
+
+    // 8) Prepare response: keep backward-compatible "filename" and add "path"
+    let filename = candidate_canon.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let rel_display = rel_path.to_string_lossy().to_string();
     if truncated {
         Ok(json!({
+            "path": rel_display,
             "filename": filename,
             "content": output,
             "truncated": true,
             "max_bytes": MAX_BYTES
         }))
     } else {
-        Ok(json!({ "filename": filename, "content": output }))
+        Ok(json!({ "path": rel_display, "filename": filename, "content": output }))
     }
 }
 
@@ -71,7 +106,7 @@ mod tests {
     #[test]
     fn read_doc_tool_valid_file() -> Result<()> {
         let tool = build_read_doc_tool();
-        let out = tool.execute(&json!({"filename": "benches.md"}))?;
+        let out = tool.execute(&json!({"path": "benches.md"}))?;
         assert_eq!(out["filename"], "benches.md");
         assert!(out["content"].as_str().unwrap_or("").len() > 0);
         Ok(())
@@ -79,8 +114,9 @@ mod tests {
 
     #[test]
     fn read_doc_impl_invalid_filename() -> Result<()> {
-        let val = read_docs_file_impl(&json!({"filename": "../secret"}), &["benches.md"]) ?;
-        assert!(val["error"].as_str().unwrap().contains("invalid filename") || val["error"].as_str().unwrap().contains("filename not allowed"));
+        let val = read_docs_file_impl(&json!({"path": "../secret"})) ?;
+        let err = val["error"].as_str().unwrap().to_string();
+        assert!(err.contains("escapes docs root") || err.contains("absolute path not allowed") || err.contains("file not found"));
         Ok(())
     }
 }

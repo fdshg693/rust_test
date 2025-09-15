@@ -4,7 +4,7 @@
 //! into a single `tools` namespace while keeping public re-exports stable.
 
 mod core; // core definitions: ToolDefinition, ToolParameters, builders
-mod constants; // example constant-returning tool(s)
+mod sample_tools; // example constant-returning tool(s)
 mod docs; // docs reading tool
 mod tavily; // tavily search tool
 
@@ -16,4 +16,4 @@ pub use core::{
 };
 pub use docs::build_read_doc_tool;
 pub use tavily::{build_tavily_search_tool, tavily_search};
-pub use constants::build_get_constants_tool;
+pub use sample_tools::{build_get_constants_tool, build_add_tool};
