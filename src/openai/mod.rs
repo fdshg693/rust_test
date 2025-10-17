@@ -36,4 +36,10 @@ pub use tools::{
 	build_read_doc_tool,
 	build_tavily_search_tool,
 	tavily_search,
+	build_number_guess_tool,
+	build_rpg_get_rules_tool,
+	build_rpg_get_state_tool,
+	build_rpg_list_actions_tool,
+	build_rpg_issue_action_tool,
+	build_rpg_tools,
 };

@@ -6,6 +6,7 @@ pub mod event;
 pub mod openai;
 pub mod ui;
 pub mod sqlite; // SQLite utilities
+pub mod rpg; // Tiny RPG library (rules/models/game/ui) for AI tools
 
 pub use app::App;
 pub use config::Config;

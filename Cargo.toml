@@ -10,12 +10,15 @@ ratatui = "0.29.0"
 async-openai = "0.29"
 tokio = { version = "1.43", features = ["rt-multi-thread", "macros"] }
 serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 tracing-appender = "0.2"
 dotenvy = "0.15"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "blocking"] }
 rusqlite = { version = "0.31", features = ["bundled", "blob"] }
+rand = "0.8"
+lazy_static = "1.5"
 
 [dev-dependencies]
 ctor = "0.2"

@@ -74,6 +74,9 @@ async fn multi_step_tool_answer_with_logger_internal(
             }
             ToolCallDecision::ToolCall { name, arguments } => {
                 debug!(target: "openai", iteration, tool = %name, "multi_step_tool_call" );
+                // Add the called tool name and its parameters to the history so the next steps know what was executed.
+                // We record this as an assistant message describing the invocation and its JSON arguments.
+                history.add_assistant(format!("ツール {name} の呼び出し引数 JSON: {arguments}"));
                 let resolution = resolve_and_execute_tool_call(
                     ToolCallDecision::ToolCall { name, arguments },
                     tools,
