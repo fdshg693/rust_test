@@ -20,7 +20,7 @@ pub trait Mode {
 /// アプリケーションが取り得るモードの列挙型
 pub enum AppMode {
     Menu(MenuMode),
-    // OpenAIChat(OpenAIChatMode),  // Phase 2で追加
+    OpenAIChat(OpenAIChatMode),
     // RpgGame(RpgGameMode),         // Phase 3で追加
     Exit,
 }
@@ -30,6 +30,7 @@ impl AppMode {
     pub fn update(&mut self) {
         match self {
             AppMode::Menu(m) => m.update(),
+            AppMode::OpenAIChat(m) => m.update(),
             AppMode::Exit => {}
         }
     }
@@ -38,6 +39,7 @@ impl AppMode {
     pub fn render(&self, f: &mut Frame) {
         match self {
             AppMode::Menu(m) => m.render(f),
+            AppMode::OpenAIChat(m) => m.render(f),
             AppMode::Exit => {}
         }
     }
@@ -46,11 +48,14 @@ impl AppMode {
     pub fn handle_key(&mut self, key: KeyEvent) -> Result<Option<AppMode>> {
         match self {
             AppMode::Menu(m) => m.handle_key(key),
+            AppMode::OpenAIChat(m) => m.handle_key(key),
             AppMode::Exit => Ok(None),
         }
     }
 }
 
 pub mod menu;
+pub mod openai_chat;
 
 pub use menu::MenuMode;
+pub use openai_chat::OpenAIChatMode;

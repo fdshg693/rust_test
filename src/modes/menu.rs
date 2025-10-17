@@ -156,10 +156,7 @@ impl Mode for MenuMode {
             KeyCode::Enter => {
                 let next_mode = match self.selected {
                     MenuItem::OpenAIChat => {
-                        // TODO: Phase 2で実装
-                        return Err(color_eyre::eyre::eyre!(
-                            "OpenAI Chat mode not yet implemented"
-                        ));
+                        AppMode::OpenAIChat(super::OpenAIChatMode::new())
                     }
                     MenuItem::RpgGame => {
                         // TODO: Phase 3で実装
