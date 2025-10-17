@@ -159,10 +159,7 @@ impl Mode for MenuMode {
                         AppMode::OpenAIChat(super::OpenAIChatMode::new())
                     }
                     MenuItem::RpgGame => {
-                        // TODO: Phase 3で実装
-                        return Err(color_eyre::eyre::eyre!(
-                            "RPG Game mode not yet implemented"
-                        ));
+                        AppMode::RpgGame(super::RpgGameMode::new())
                     }
                     MenuItem::Exit => AppMode::Exit,
                 };

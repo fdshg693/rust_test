@@ -21,7 +21,7 @@ pub trait Mode {
 pub enum AppMode {
     Menu(MenuMode),
     OpenAIChat(OpenAIChatMode),
-    // RpgGame(RpgGameMode),         // Phase 3で追加
+    RpgGame(RpgGameMode),
     Exit,
 }
 
@@ -31,6 +31,7 @@ impl AppMode {
         match self {
             AppMode::Menu(m) => m.update(),
             AppMode::OpenAIChat(m) => m.update(),
+            AppMode::RpgGame(m) => m.update(),
             AppMode::Exit => {}
         }
     }
@@ -40,6 +41,7 @@ impl AppMode {
         match self {
             AppMode::Menu(m) => m.render(f),
             AppMode::OpenAIChat(m) => m.render(f),
+            AppMode::RpgGame(m) => m.render(f),
             AppMode::Exit => {}
         }
     }
@@ -49,6 +51,7 @@ impl AppMode {
         match self {
             AppMode::Menu(m) => m.handle_key(key),
             AppMode::OpenAIChat(m) => m.handle_key(key),
+            AppMode::RpgGame(m) => m.handle_key(key),
             AppMode::Exit => Ok(None),
         }
     }
@@ -56,6 +59,8 @@ impl AppMode {
 
 pub mod menu;
 pub mod openai_chat;
+pub mod rpg_game;
 
 pub use menu::MenuMode;
 pub use openai_chat::OpenAIChatMode;
+pub use rpg_game::RpgGameMode;
