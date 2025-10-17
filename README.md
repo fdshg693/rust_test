@@ -1,131 +1,148 @@
-# プロジェクト構造 - Rustベストプラクティス
+# Rust TUI Application - Multi-Mode System
 
-このドキュメントでは、リファクタリング後のプロジェクト構造について説明します。
+This is a Rust TUI application using ratatui with a multi-mode system (Menu, OpenAI Chat, RPG Game).
 
-## 新しいモジュール構造
+## Project Structure
 
 ```
 src/
-├── main.rs          # エントリーポイント（最小限）
-├── lib.rs           # ライブラリルートとメインループ
-├── app.rs           # アプリケーション状態管理
-├── config.rs        # 設定と定数
-├── event.rs         # イベント処理
-├── openai.rs        # OpenAI API統合
-├── sqlite/          # SQLite 仮想ファイルストレージユーティリティ
-└── ui.rs            # UI描画コンポーネント
+├── main.rs              # Application entry point
+├── lib.rs               # Main loop and mode-driven architecture
+├── config.rs            # Configuration and constants
+├── modes/               # Mode system (Phase 4 completed)
+│   ├── mod.rs           # Mode trait and AppMode enum
+│   ├── menu.rs          # Menu mode (startup screen)
+│   ├── openai_chat.rs   # OpenAI chat mode
+│   └── rpg_game.rs      # RPG game mode
+├── openai/              # OpenAI API integration
+│   ├── worker.rs        # Background worker
+│   ├── simple.rs        # Simple API calls
+│   └── call/            # Function calling system
+├── rpg/                 # RPG game logic
+├── sqlite/              # SQLite database utilities
+└── bin/                 # Binary targets
 ```
 
-## 各モジュールの責務
+## Features
 
-### `main.rs`
-- アプリケーションのエントリーポイント
-- 最小限のコードで、ライブラリの`run`関数を呼び出すのみ
+### 1. Multi-Mode System (Phase 4 ✅)
+- **Menu Mode**: Startup screen to select OpenAI Chat, RPG Game, or Exit
+- **OpenAI Chat Mode**: Interactive chat with OpenAI's API
+- **RPG Game Mode**: Text-based RPG adventure game
+- Easy mode switching with Esc to return to menu
 
-### `lib.rs`
-- ライブラリのルートモジュール
-- 各モジュールの公開とメインループの実装
-- モジュール間の調整役
+### 2. OpenAI Integration
+- Background worker thread for API calls
+- Streaming-like responses with real-time updates
+- Function calling support (TAVILY_search, number guessing, etc.)
+- Tool resolution with 2-step completion flow
 
-### `app.rs`
-- アプリケーションの状態管理
-- `App`構造体とその関連メソッド
-- チャンネル通信の管理
+### 3. RPG Game
+- Character stats (HP, MP, Attack Power)
+- Combat system with A (Attack), H (Heal), R (Rest), Q (Quit)
+- Procedural enemy generation
+- Win/lose conditions
 
-### `config.rs`
-- アプリケーション設定
-- 定数の定義（X, Y）
-- 設定可能なパラメータ
+### 4. SQLite Storage
+- Simple key-value storage with file metadata
+- API: `upsert_text`, `read_text`, `list_files`, etc.
+- Supports both text and binary data
 
-### `event.rs`
-- キーボードイベントの処理
-- ユーザー入力の解釈とアプリケーション状態の更新
+## Architecture (Phase 4)
 
-### `openai.rs`
-- OpenAI APIとの統合
-- バックグラウンドワーカーの管理
-- API呼び出しと応答処理
-
-### `ui.rs`
-- UI描画ロジック
-- Ratutuiを使用したコンポーネント描画
-- 画面レイアウトの管理
-
-### `sqlite/`
-- `rusqlite` を用いたシンプルな仮想ファイルストレージ
-- API: `Db::open_or_create`, `upsert_text`, `upsert_bytes`, `read_text`, `read_bytes`, `list_files`, `delete`, `import_file_from_fs`, `export_file_to_fs`
-- テーブル `files(path PRIMARY KEY, data BLOB, size_bytes INTEGER, modified_at_epoch_ms INTEGER)`
-
-#### 使用例
+### Mode Trait
 ```rust
-use rust_test::sqlite::Db;
-
-fn main() -> color_eyre::Result<()> {
-	color_eyre::install()?;
-	let mut db = Db::open_or_create("app_data.sqlite")?;
-	db.upsert_text("notes/hello.txt", "Hello SQLite")?;
-	let txt = db.read_text("notes/hello.txt")?;
-	println!("{}", txt);
-	for entry in db.list_files("notes/%")? {
-		println!("{} ({} bytes)", entry.path, entry.size_bytes);
-	}
-	Ok(())
+pub trait Mode {
+    fn update(&mut self);  // Non-blocking async result checking
+    fn render(&self, f: &mut Frame);  // Immutable rendering
+    fn handle_key(&mut self, key: KeyEvent) -> Result<Option<AppMode>>;
 }
 ```
 
-## ベストプラクティスの適用
+### Mode Lifecycle
+1. `MenuMode` starts at launch
+2. User selects a mode via Up/Down/Enter
+3. Each mode has its own state, rendering, and event handling
+4. Esc returns to menu
+5. Exit from menu terminates the application
 
-1. **単一責任原則**: 各モジュールが明確な責務を持つ
-2. **関心の分離**: UI、ビジネスロジック、API統合を分離
-3. **モジュール化**: 再利用可能で保守しやすいコード構造
-4. **型安全性**: Rustの型システムを活用した安全なコード
-5. **エラーハンドリング**: `Result`型を使用した適切なエラー処理
+### Old Files (Phase 4 cleanup)
+- ❌ Deleted: `src/app.rs` → moved to `src/modes/openai_chat.rs`
+- ❌ Deleted: `src/event.rs` → integrated into Mode::handle_key()
+- ❌ Deleted: `src/ui.rs` → each mode has its own render() method
 
-## 利点
+## Usage
 
-- **保守性**: 各機能が独立したモジュールに分離されている
-- **テスト容易性**: 各モジュールを個別にテストできる
-- **再利用性**: モジュールを他のプロジェクトで再利用可能
-- **可読性**: コードの構造が明確で理解しやすい
-- **拡張性**: 新機能の追加が容易
-
-## 実行方法
-
-```bash
-# 開発モードで実行
-cargo run
-
-# リリースモードで実行
-cargo run --release
-
-# コンパイルチェック
-cargo check
-
-# テスト実行
-cargo test
-
-## TAVILY Search ツール統合
-
-OpenAI の function calling から利用できる Web 検索ツール `TAVILY_search` を追加しました。モデルがツール呼び出しを提案すると、バックエンドワーカーが TAVILY API を呼び出し、その結果(JSON)を最終回答生成に渡します。
-
-### 環境変数
-`TAVILY_API_KEY` を設定してください。未設定の場合、ツールは `{ "error": "missing TAVILY_API_KEY env" }` を返します。
-
-Windows PowerShell 例:
-```powershell
-$env:TAVILY_API_KEY = "tvly-..."
+### Menu Mode (Startup)
+```
+Use Up/Down arrow keys to select a mode
+Press Enter to select
+Press Esc to exit
 ```
 
-### ツール名と引数スキーマ
-- ツール名: `TAVILY_search`
-- 引数:
-	- `query`: 文字列 (必須)
-	- `max_results`: 数値 (任意, 1-10, 省略時 5)
+### OpenAI Chat Mode
+```
+Type your message and press Enter to submit
+Press Backspace to delete characters
+View AI responses in real-time
+Press Esc to return to menu
+```
 
-### 返却JSON (例)
-TAVILY API のレスポンス JSON をそのまま（あるいは `raw` / `error` フィールドを含む簡易オブジェクト）で返します。
+### RPG Game Mode
+```
+Press A - Attack
+Press H - Heal (costs MP)
+Press R - Rest (restore HP and MP)
+Press Q - Quit game
+Press Esc - Return to menu
+```
 
-### 実装概要
-- ファイル: `src/openai/TAVILY.rs`
-- HTTPクライアント: `reqwest` (blocking) をワーカースレッドで同期利用
-- OpenAI との 2 ステップ: ツール提案 -> 実行 -> 関数結果を 2 度目の Chat Completion に投入
+## Running the Application
+
+```bash
+# Development mode
+cargo run
+
+# Release mode (optimized)
+cargo run --release
+
+# With logging
+RUST_LOG=app=debug,openai=debug cargo run
+
+# Check code
+cargo check
+
+# Run tests
+cargo test
+```
+
+## Environment Variables
+
+### Required
+- `OPENAI_API_KEY`: Your OpenAI API key
+
+### Optional
+- `TAVILY_API_KEY`: For web search functionality
+- `RUST_LOG`: Control logging level (e.g., `app=debug,openai=debug`)
+
+## Configuration
+
+Edit `src/config.rs` to customize:
+- `MODEL`: Default OpenAI model (currently `gpt-4o-mini`)
+- `MAX_TOKENS`: Max tokens per response
+- Game parameters and OpenAI settings
+
+## Development Guide
+
+See `.github/copilot-instructions.md` for:
+- Architecture patterns
+- Adding new modes
+- Extending OpenAI tools
+- Best practices for this codebase
+
+## TAVILY Search Tool
+
+OpenAI function calling integration with web search:
+- Tool name: `TAVILY_search`
+- Arguments: `query` (required), `max_results` (optional, 1-10)
+- Requires: `TAVILY_API_KEY` environment variable

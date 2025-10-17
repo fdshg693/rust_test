@@ -1,15 +1,11 @@
 
 // 同階層のファイルをモジュールとしてインポート
-pub mod app;
 pub mod config;
-pub mod event;
 pub mod openai;
-pub mod ui;
 pub mod sqlite; // SQLite utilities
 pub mod rpg; // Tiny RPG library (rules/models/game/ui) for AI tools
 pub mod modes; // Mode system for different UI modes
 
-pub use app::App;
 pub use config::Config;
 pub use sqlite::Db;
 
