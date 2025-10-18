@@ -33,7 +33,7 @@ fn main() -> Result<()> {
     // guard を使うことでdropされないようにする
     let _keep_guard = guard;
     let terminal = ratatui::init();
-    let res = rust_test_cli::run(terminal);
+    let res = app_cli::run(terminal);
     ratatui::restore();
     res
 }

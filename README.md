@@ -5,22 +5,30 @@ This is a Rust TUI application using ratatui with a multi-mode system (Menu, Ope
 ## Project Structure
 
 ```
-src/
-├── main.rs              # Application entry point
-├── lib.rs               # Main loop and mode-driven architecture
-├── config.rs            # Configuration and constants
-├── modes/               # Mode system (Phase 4 completed)
-│   ├── mod.rs           # Mode trait and AppMode enum
-│   ├── menu.rs          # Menu mode (startup screen)
-│   ├── openai_chat.rs   # OpenAI chat mode
-│   └── rpg_game.rs      # RPG game mode
-├── openai/              # OpenAI API integration
-│   ├── worker.rs        # Background worker
-│   ├── simple.rs        # Simple API calls
-│   └── call/            # Function calling system
-├── rpg/                 # RPG game logic
-├── sqlite/              # SQLite database utilities
-└── bin/                 # Binary targets
+crates/
+├── app_cli/             # CLI/TUI application
+│   ├── src/
+│   │   ├── main.rs      # Application entry point
+│   │   ├── lib.rs       # Main loop and mode-driven architecture
+│   │   ├── modes/       # Mode system (Menu, OpenAI Chat, RPG)
+│   │   └── ui/          # UI components
+│   └── Cargo.toml
+├── app_core/            # Core business logic (shared)
+│   ├── src/
+│   │   ├── config.rs    # Configuration and constants
+│   │   ├── openai/      # OpenAI API integration with tool calling
+│   │   ├── rpg/         # RPG game logic
+│   │   ├── services/    # Business logic services
+│   │   └── sqlite/      # SQLite database utilities
+│   └── Cargo.toml
+└── app_web/             # Web application (Axum)
+    ├── src/
+    │   ├── main.rs      # Web server entry point
+    │   ├── handlers/    # API handlers
+    │   └── models/      # Request/response models
+    ├── static/          # Static assets
+    ├── templates/       # HTML templates
+    └── Cargo.toml
 ```
 
 ## Features
@@ -31,11 +39,17 @@ src/
 - **RPG Game Mode**: Text-based RPG adventure game
 - Easy mode switching with Esc to return to menu
 
-### 2. OpenAI Integration
-- Background worker thread for API calls
-- Streaming-like responses with real-time updates
-- Function calling support (TAVILY_search, number guessing, etc.)
-- Tool resolution with 2-step completion flow
+### 2. OpenAI Integration (✅ Web/CLI両対応)
+- Background worker thread for API calls (CLI)
+- Async service layer for web handlers (Web)
+- **Tool calling support with Send boundary** - Web/CLI両方で利用可能
+  - Number guessing tool
+  - Get constants tool
+  - Add tool
+  - RPG tools
+  - TAVILY search tool
+- Multi-step tool resolution with logging
+- Streaming-like responses with real-time updates (CLI)
 
 ### 3. RPG Game
 - Character stats (HP, MP, Attack Power)
@@ -94,21 +108,45 @@ Press Esc - Return to menu
 
 ## Running the Application
 
+### CLI/TUI Application
+
 ```bash
 # Development mode
-cargo run
+cargo run -p app_cli
 
 # Release mode (optimized)
-cargo run --release
+cargo run -p app_cli --release
 
 # With logging
-RUST_LOG=app=debug,openai=debug cargo run
+RUST_LOG=app=debug,openai=debug cargo run -p app_cli
+```
 
+### Web Application
+
+```bash
+# Development mode
+cargo run -p app_web
+
+# Then open browser at:
+# - Home: http://localhost:3000
+# - Chat: http://localhost:3000/chat
+# - RPG: http://localhost:3000/rpg
+
+# With logging
+RUST_LOG=web=debug,chat_service=debug cargo run -p app_web
+```
+
+### General Commands
+
+```bash
 # Check code
 cargo check
 
 # Run tests
 cargo test
+
+# Run specific package tests
+cargo test -p app_core
 ```
 
 ## Environment Variables
@@ -141,3 +179,37 @@ OpenAI function calling integration with web search:
 - Tool name: `TAVILY_search`
 - Arguments: `query` (required), `max_results` (optional, 1-10)
 - Requires: `TAVILY_API_KEY` environment variable
+
+## Technical Details
+
+### OpenAI Tool Calling with Send Boundary
+
+Web版とCLI版の両方でOpenAI tool calling機能を使用するため、`multi_step_tool_answer_with_logger`関数のクロージャに`Send`トレイト境界を追加しています。
+
+```rust
+pub async fn multi_step_tool_answer_with_logger<F>(
+    original_user_prompt: &str,
+    tools: &[ToolDefinition],
+    config: &OpenAIConfig,
+    max_loops: Option<usize>,
+    logger: F,
+) -> Result<MultiStepAnswer>
+where
+    F: FnMut(&MultiStepLogEvent) + Send,  // ← Send境界追加
+{
+    // ...
+}
+```
+
+**理由**:
+- Axumのハンドラは`Send + 'static`なFutureを返す必要がある
+- Web版はマルチスレッド環境で動作するため、クロージャが複数スレッド間で安全に移動できる必要がある
+- CLI版（シングルスレッド）でも問題なく動作する
+
+**実装場所**:
+- `crates/app_core/src/openai/call/multi_step.rs` - Tool calling実装
+- `crates/app_core/src/services/chat_service.rs` - ビジネスロジック層
+- `crates/app_web/src/handlers/chat.rs` - Web APIハンドラ
+- `crates/app_cli/src/modes/openai_chat.rs` - TUI実装
+
+詳細は `feature/openai_web_tool.md` を参照してください。

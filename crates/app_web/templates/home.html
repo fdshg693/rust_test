@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rust TUI Web - Home</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 90%;
+        }
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 2rem;
+            font-size: 2.5rem;
+        }
+        .menu {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        .menu-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            text-decoration: none;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+        .menu-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+        .menu-item.chat {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .menu-item.rpg {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .description {
+            text-align: center;
+            color: #666;
+            margin-top: 2rem;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🦀 Rust TUI Web</h1>
+        <div class="menu">
+            <a href="/chat" class="menu-item chat">
+                💬 OpenAI Chat
+            </a>
+            <a href="/rpg" class="menu-item rpg">
+                🎮 RPG Game
+            </a>
+        </div>
+        <p class="description">
+            Choose an application from the menu above
+        </p>
+    </div>
+</body>
+</html>

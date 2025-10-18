@@ -1,4 +1,4 @@
-//! rust_test_core
+//! app_core
 //! 
 //! OpenAI API連携、RPGゲームロジック、SQLite操作などの共通ロジックを提供するコアクレート。
 //! TUI/Web両方で利用可能。

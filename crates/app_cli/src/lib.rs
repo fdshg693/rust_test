@@ -1,5 +1,5 @@
 // コアクレートから共通ロジックをインポート
-pub use rust_test_core::{self as core, OpenAIConfig};
+pub use app_core::{self as core, OpenAIConfig};
 
 // CLI固有のモジュール
 pub mod modes; // Mode system for different UI modes

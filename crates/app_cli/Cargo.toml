@@ -1,5 +1,5 @@
 [package]
-name = "rust_test_cli"
+name = "app_cli"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,7 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 # コアクレート
-rust_test_core = { path = "../rust_test_core" }
+app_core = { path = "../app_core" }
 
 # TUI関連
 ratatui = { workspace = true }
@@ -32,6 +32,7 @@ tokio = { workspace = true }
 # その他
 serde = { workspace = true }
 serde_json = { workspace = true }
+ctor.workspace = true
 
 [dev-dependencies]
 criterion = { workspace = true }

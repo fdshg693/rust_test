@@ -26,19 +26,22 @@ pub async fn multi_step_tool_answer(
 }
 
 #[instrument(name = "multi_step_tool_answer_with_logger", skip(tools, config, logger))]
-pub async fn multi_step_tool_answer_with_logger(
+pub async fn multi_step_tool_answer_with_logger<F>(
     original_user_prompt: &str,
     tools: &[ToolDefinition],
     config: &OpenAIConfig,
     max_loops: Option<usize>,
-    logger: impl FnMut(&MultiStepLogEvent),
-) -> Result<MultiStepAnswer> {
+    logger: F,
+) -> Result<MultiStepAnswer>
+where
+    F: FnMut(&MultiStepLogEvent) + Send,
+{
     let mut user_logger = logger;
     let mut log_and_forward = |ev: &MultiStepLogEvent| {
         debug!(target: "openai", event = %ev, "multi_step_event");
         user_logger(ev);
     };
-    let mut opt_logger: Option<&mut dyn FnMut(&MultiStepLogEvent)> = Some(&mut log_and_forward);
+    let mut opt_logger: Option<&mut (dyn FnMut(&MultiStepLogEvent) + Send)> = Some(&mut log_and_forward);
     multi_step_tool_answer_with_logger_internal(
         original_user_prompt,
         tools,
@@ -53,7 +56,7 @@ async fn multi_step_tool_answer_with_logger_internal(
     tools: &[ToolDefinition],
     config: &OpenAIConfig,
     max_loops: Option<usize>,
-    mut logger: Option<&mut dyn FnMut(&MultiStepLogEvent)>,
+    mut logger: Option<&mut (dyn FnMut(&MultiStepLogEvent) + Send)>,
 ) -> Result<MultiStepAnswer> {
     let max_loops = max_loops.unwrap_or(5);
     let mut steps: Vec<ToolResolution> = Vec::new();
@@ -136,13 +139,16 @@ pub fn multi_step_tool_answer_blocking(
 }
 
 #[instrument(name = "multi_step_tool_answer_blocking_with_logger", skip(tools, config, logger))]
-pub fn multi_step_tool_answer_blocking_with_logger(
+pub fn multi_step_tool_answer_blocking_with_logger<F>(
     original_user_prompt: &str,
     tools: &[ToolDefinition],
     config: &OpenAIConfig,
     max_loops: Option<usize>,
-    logger: impl FnMut(&MultiStepLogEvent),
-) -> Result<MultiStepAnswer> {
+    logger: F,
+) -> Result<MultiStepAnswer>
+where
+    F: FnMut(&MultiStepLogEvent) + Send,
+{
     let max_loops_val = max_loops.unwrap_or(5);
     info!(target: "openai", model = %config.model, max_tokens = config.max_tokens, max_loops = max_loops_val, "multi_step_blocking_request");
 
@@ -152,7 +158,7 @@ pub fn multi_step_tool_answer_blocking_with_logger(
         user_logger(ev);
     };
 
-    let mut opt_logger: Option<&mut dyn FnMut(&MultiStepLogEvent)> = Some(&mut log_and_forward);
+    let mut opt_logger: Option<&mut (dyn FnMut(&MultiStepLogEvent) + Send)> = Some(&mut log_and_forward);
     let rt = Runtime::new()?;
     let result = rt.block_on(multi_step_tool_answer_with_logger_internal(
         original_user_prompt,

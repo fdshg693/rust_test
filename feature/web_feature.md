@@ -57,7 +57,7 @@ rust_test/
 rust_test/
 ├── Cargo.toml              # ワークスペース化
 ├── crates/
-│   ├── rust_test_core/     # 共通ロジッククレート
+│   ├── app_core/     # 共通ロジッククレート
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -70,7 +70,7 @@ rust_test/
 │   │       ├── rpg/        # 現行のrpg/（ui.rs除く）を移動
 │   │       └── sqlite/     # 現行のsqlite/を移動
 │   │
-│   ├── rust_test_cli/      # TUIアプリクレート
+│   ├── app_cli/      # TUIアプリクレート
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── main.rs
@@ -79,7 +79,7 @@ rust_test/
 │   │       └── ui/
 │   │           └── rpg_ui.rs  # 現行のrpg/ui.rs
 │   │
-│   └── rust_test_web/      # Webアプリクレート（新規）
+│   └── app_web/      # Webアプリクレート（新規）
 │       ├── Cargo.toml
 │       └── src/
 │           ├── main.rs     # Axumサーバー
@@ -90,7 +90,7 @@ rust_test/
 
 #### 1.2 サービス層の設計
 
-**`crates/rust_test_core/src/services/chat_service.rs`**
+**`crates/app_core/src/services/chat_service.rs`**
 ```rust
 use crate::openai::{multi_step_tool_answer_with_logger, MultiStepAnswer};
 use crate::openai::tools::build_number_guess_tool;
@@ -131,7 +131,7 @@ impl ChatService {
 }
 ```
 
-**`crates/rust_test_core/src/services/rpg_service.rs`**
+**`crates/app_core/src/services/rpg_service.rs`**
 ```rust
 use crate::rpg::{Game, Command, GameSnapshot};
 use serde::{Serialize, Deserialize};
@@ -180,10 +180,10 @@ impl RpgService {
 - **テンプレートエンジン**: [Askama](https://github.com/djc/askama) または [Tera](https://github.com/Keats/tera)
 - **WebSocket**: Axumの`extract::ws`（リアルタイムチャット用）
 
-**依存関係追加（`crates/rust_test_web/Cargo.toml`）:**
+**依存関係追加（`crates/app_web/Cargo.toml`）:**
 ```toml
 [dependencies]
-rust_test_core = { path = "../rust_test_core" }
+app_core = { path = "../app_core" }
 axum = { version = "0.7", features = ["ws", "macros"] }
 tokio = { version = "1.43", features = ["full"] }
 tower = "0.4"
@@ -220,7 +220,7 @@ GET  /static/*                  # CSS/JS
 
 #### 2.3 実装例
 
-**`crates/rust_test_web/src/main.rs`**
+**`crates/app_web/src/main.rs`**
 ```rust
 use axum::{
     routing::{get, post},
@@ -258,7 +258,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-**`crates/rust_test_web/src/handlers/chat.rs`**
+**`crates/app_web/src/handlers/chat.rs`**
 ```rust
 use axum::{
     extract::State,
@@ -266,7 +266,7 @@ use axum::{
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use rust_test_core::{Config, services::ChatService};
+use app_core::{Config, services::ChatService};
 
 #[derive(Deserialize)]
 pub struct ChatRequest {
@@ -291,7 +291,7 @@ pub async fn chat_api(
 }
 ```
 
-**`crates/rust_test_web/src/handlers/rpg.rs`**
+**`crates/app_web/src/handlers/rpg.rs`**
 ```rust
 use axum::{
     extract::{State, Json},
@@ -299,7 +299,7 @@ use axum::{
 };
 use tower_sessions::Session;
 use serde::{Deserialize, Serialize};
-use rust_test_core::{rpg::Command, services::RpgService};
+use app_core::{rpg::Command, services::RpgService};
 
 const RPG_SESSION_KEY: &str = "rpg_service";
 
@@ -455,11 +455,11 @@ async fn handle_socket(mut socket: WebSocket) {
 **開発環境:**
 ```bash
 # CLIアプリ
-cd crates/rust_test_cli
+cd crates/app_cli
 cargo run
 
 # Webアプリ
-cd crates/rust_test_web
+cd crates/app_web
 cargo run
 # -> http://localhost:3000
 ```
@@ -475,14 +475,14 @@ cargo run
 FROM rust:1.75 as builder
 WORKDIR /app
 COPY . .
-RUN cargo build --release -p rust_test_web
+RUN cargo build --release -p app_web
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y libssl3 ca-certificates
-COPY --from=builder /app/target/release/rust_test_web /usr/local/bin/
+COPY --from=builder /app/target/release/app_web /usr/local/bin/
 ENV RUST_LOG=info
 EXPOSE 3000
-CMD ["rust_test_web"]
+CMD ["app_web"]
 ```
 
 ---
@@ -491,12 +491,12 @@ CMD ["rust_test_web"]
 
 ### Week 1-2: Phase 1 完了
 - [ ] Cargoワークスペース化
-- [ ] `rust_test_core`クレート作成
+- [ ] `app_core`クレート作成
 - [ ] サービス層実装（`ChatService`, `RpgService`）
-- [ ] 既存TUIアプリを`rust_test_cli`に移行し動作確認
+- [ ] 既存TUIアプリを`app_cli`に移行し動作確認
 
 ### Week 3-4: Phase 2 開始
-- [ ] `rust_test_web`クレート作成
+- [ ] `app_web`クレート作成
 - [ ] Axumサーバー基本構成
 - [ ] ChatAPI実装（POST `/api/chat`）
 - [ ] RPG API実装（基本4エンドポイント）
@@ -563,9 +563,9 @@ CLI/WebがgRPCサーバーを共有
 
 ## 成功指標
 
-- ✅ `rust_test_core`が単体でビルド・テスト可能
-- ✅ CLI版（`rust_test_cli`）が現行と同等の機能を提供
-- ✅ Web版（`rust_test_web`）がOpenAI Chat/RPG Gameの基本機能を提供
+- ✅ `app_core`が単体でビルド・テスト可能
+- ✅ CLI版（`app_cli`）が現行と同等の機能を提供
+- ✅ Web版（`app_web`）がOpenAI Chat/RPG Gameの基本機能を提供
 - ✅ コードの重複率 < 10%（共通ロジック部分）
 - ✅ APIレスポンスタイム < 2秒（OpenAI呼び出し除く）
 - ✅ 本番環境で安定稼働（Uptime > 99%）

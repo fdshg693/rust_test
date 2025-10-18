@@ -1,7 +1,8 @@
 [workspace]
 members = [
-    "crates/rust_test_core",
-    "crates/rust_test_cli",
+    "crates/app_core",
+    "crates/app_cli",
+    "crates/app_web",
 ]
 resolver = "2"
 

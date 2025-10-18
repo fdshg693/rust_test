@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI Chat</title>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            height: 80vh;
+        }
+        .header {
+            padding: 1.5rem;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 20px 20px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 1.5rem;
+        }
+        .back-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        #messages {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            background: #f7f7f7;
+        }
+        .message {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border-radius: 10px;
+            max-width: 80%;
+        }
+        .message.user {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+        }
+        .message.ai {
+            background: white;
+            border: 2px solid #e0e0e0;
+        }
+        .message-label {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .input-area {
+            padding: 1.5rem;
+            background: white;
+            border-radius: 0 0 20px 20px;
+            border-top: 2px solid #e0e0e0;
+        }
+        form {
+            display: flex;
+            gap: 1rem;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #f093fb;
+        }
+        button[type="submit"] {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button[type="submit"]:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+        button[type="submit"]:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .loading {
+            text-align: center;
+            color: #999;
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" x-data="chatApp()">
+        <div class="header">
+            <h1>💬 OpenAI Chat</h1>
+            <a href="/" class="back-btn">← Back</a>
+        </div>
+        
+        <div id="messages">
+            <template x-for="msg in messages" :key="msg.id">
+                <div class="message" :class="msg.type">
+                    <div class="message-label" x-text="msg.type === 'user' ? 'You' : 'AI'"></div>
+                    <div x-text="msg.content"></div>
+                </div>
+            </template>
+            <div x-show="loading" class="loading">AI is thinking...</div>
+        </div>
+        
+        <div class="input-area">
+            <form @submit.prevent="sendMessage">
+                <input 
+                    type="text" 
+                    x-model="input" 
+                    placeholder="メッセージを入力..."
+                    :disabled="loading"
+                >
+                <button type="submit" :disabled="loading || !input.trim()">送信</button>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        function chatApp() {
+            return {
+                input: '',
+                messages: [],
+                loading: false,
+                messageId: 0,
+                
+                async sendMessage() {
+                    if (!this.input.trim() || this.loading) return;
+                    
+                    const userMessage = this.input.trim();
+                    this.messages.push({
+                        id: this.messageId++,
+                        type: 'user',
+                        content: userMessage
+                    });
+                    
+                    this.input = '';
+                    this.loading = true;
+                    
+                    try {
+                        const response = await fetch('/api/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ prompt: userMessage })
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        
+                        const data = await response.json();
+                        this.messages.push({
+                            id: this.messageId++,
+                            type: 'ai',
+                            content: data.response
+                        });
+                    } catch (error) {
+                        this.messages.push({
+                            id: this.messageId++,
+                            type: 'ai',
+                            content: 'Error: ' + error.message
+                        });
+                    } finally {
+                        this.loading = false;
+                        this.$nextTick(() => {
+                            const messagesDiv = document.getElementById('messages');
+                            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                        });
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

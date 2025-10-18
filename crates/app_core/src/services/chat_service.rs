@@ -24,7 +24,7 @@ impl ChatService {
         Self::new(OpenAIConfig::default())
     }
 
-    /// プロンプトを送信してAI回答を取得（同期版）
+    /// プロンプトを送信してAI回答を取得（ツールあり版）
     /// 
     /// # Arguments
     /// * `prompt` - ユーザーからの入力プロンプト
@@ -32,7 +32,7 @@ impl ChatService {
     /// # Returns
     /// AI応答文字列
     pub async fn get_response(&self, prompt: &str) -> Result<String> {
-        // デフォルトツール（数字当てゲーム）を使用
+        // ツールあり版を使用（Web/CLI両対応）
         let tools = vec![build_number_guess_tool(8, 10)];
         
         let answer = multi_step_tool_answer_with_logger(
@@ -40,9 +40,13 @@ impl ChatService {
             &tools, 
             &self.config, 
             Some(10),
-            |ev| tracing::info!(target: "chat_service", event=%ev, "step")
+            |ev| {
+                // Sendなクロージャ（キャプチャなし or Send型のみキャプチャ）
+                tracing::info!(target: "chat_service", event=%ev, "step");
+            }
         ).await?;
         
+        tracing::info!(target: "chat_service", "AI response received with tools");
         Ok(answer.final_answer)
     }
 
