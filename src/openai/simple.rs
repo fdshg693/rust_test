@@ -2,13 +2,14 @@
 
 use crate::config::OpenAIConfig;
 use crate::openai::ConversationHistory;
-use async_openai::types::{
-    CreateChatCompletionRequestArgs,
-};
 use async_openai::Client;
+use async_openai::types::{
+    ChatCompletionTool
+};
 use color_eyre::Result;
 use tokio::runtime::Runtime;
-use tracing::{info, debug, instrument};
+use tracing::{instrument};
+use crate::openai::call::request_chat_completion;
 
 /// 単純な1回の問い合わせでAIの回答を取得する（関数呼び出しやワーカーループなし）
 #[instrument(name = "get_ai_answer_once", skip(config))]
@@ -19,16 +20,11 @@ pub async fn get_ai_answer_once(prompt: &str, config: &OpenAIConfig) -> Result<S
     let mut history = ConversationHistory::with_default_system();
     history.add_user(prompt);
 
-    let req = CreateChatCompletionRequestArgs::default()
-        .model(&config.model)
-        .messages(history.as_slice_with_system())
-        .max_completion_tokens(config.max_completion_tokens)
-        // .max_tokens(config.max_tokens)
-        .build()?;
+    let empty_tools: Vec<ChatCompletionTool> = Vec::new();
 
-    info!(target: "openai", "simple_request: model={}, max_tokens={}", config.model, config.max_tokens);
+    let req = request_chat_completion(&history, config, &empty_tools, "auto").await?;
+
     let resp = client.chat().create(req).await?;
-    debug!(target: "openai", "simple_response_choices: {}", resp.choices.len());
 
     let text = resp
         .choices

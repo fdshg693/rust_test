@@ -24,6 +24,7 @@ pub use call::{
 	multi_step_tool_answer_blocking,
 	multi_step_tool_answer_with_logger,
 	multi_step_tool_answer_blocking_with_logger,
+	request_chat_completion
 };
 pub use history::ConversationHistory;
 pub use tools::{

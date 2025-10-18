@@ -1,14 +1,15 @@
 use crate::config::OpenAIConfig;
 use crate::openai::tools::ToolDefinition;
 use crate::openai::ConversationHistory;
+use crate::openai::call::request_chat_completion;
 use async_openai::types::{
     ChatCompletionRequestMessage,
-    CreateChatCompletionRequestArgs,
+    ChatCompletionTool
 };
 use async_openai::Client;
 use color_eyre::Result;
 use tokio::runtime::Runtime;
-use tracing::{debug, info, instrument};
+use tracing::{instrument};
 
 use super::types::ToolCallDecision;
 
@@ -31,20 +32,11 @@ pub async fn propose_tool_call(
         full_history.push(msg.clone());
     }
 
-    let tools_for_api: Vec<_> = tools.iter().map(|t| t.as_chat_tool()).collect();
+    let tools_for_api: Vec<ChatCompletionTool> = tools.iter().map(|t| t.as_chat_tool()).collect();
 
-    let req = CreateChatCompletionRequestArgs::default()
-        .model(&config.model)
-        .messages(full_history.as_slice_with_system())
-        .tools(tools_for_api)
-        .tool_choice("auto")
-        .max_completion_tokens(config.max_completion_tokens)
-        .max_tokens(config.max_tokens)
-        .build()?;
+    let req = request_chat_completion(&full_history, config, &tools_for_api, "auto").await?;
 
-    info!(target: "openai", "propose_tool_call_request: model={}, max_tokens={}", config.model, config.max_tokens);
     let resp = client.chat().create(req).await?;
-    debug!(target: "openai", "propose_tool_call_response_choices: {}", resp.choices.len());
 
     let choice = match resp.choices.first() {
         Some(c) => c,

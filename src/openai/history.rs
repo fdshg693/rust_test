@@ -1,5 +1,5 @@
 use async_openai::types::{
-    ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestFunctionMessageArgs,
+    ChatCompletionRequestAssistantMessageArgs,
     ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
 };
 use crate::config::DEFAULT_SYSTEM_PROMPT;
@@ -93,9 +93,8 @@ impl ConversationHistory {
 
     /// Add function message (tool/function return). Raw JSON/string already prepared upstream.
     pub fn add_function<S: AsRef<str>, N: AsRef<str>>(&mut self, name: N, content: S) -> &mut Self {
-        let msg = ChatCompletionRequestFunctionMessageArgs::default()
-            .name(name.as_ref())
-            .content(content.as_ref())
+        let msg = ChatCompletionRequestAssistantMessageArgs::default()
+            .content(name.as_ref().to_string() + " is called. Result: " + content.as_ref())
             .build()
             .expect("valid function message");
         self.messages.push(msg.into());

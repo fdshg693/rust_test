@@ -4,6 +4,7 @@ pub mod types;
 pub mod proposer;
 pub mod resolver;
 pub mod multi_step;
+pub mod request;
 
 // Re-export commonly used items to keep external API stable via openai::call::* if needed.
 pub use types::{ToolCallDecision, ToolResolution, MultiStepAnswer, MultiStepLogEvent};
@@ -15,3 +16,4 @@ pub use multi_step::{
     multi_step_tool_answer_with_logger,
     multi_step_tool_answer_blocking_with_logger,
 };
+pub use request::request_chat_completion;
