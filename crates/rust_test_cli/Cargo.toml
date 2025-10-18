@@ -1,0 +1,43 @@
+[package]
+name = "rust_test_cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rust_test"
+path = "src/main.rs"
+
+[dependencies]
+# コアクレート
+rust_test_core = { path = "../rust_test_core" }
+
+# TUI関連
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+
+# ログ
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+
+# エラーハンドリング
+color-eyre = { workspace = true }
+
+# 環境変数
+dotenvy = { workspace = true }
+
+# 非同期ランタイム
+tokio = { workspace = true }
+
+# その他
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+tempfile = { workspace = true }
+
+[[bench]]
+name = "simple_bench"
+path = "../../benches/simple_bench.rs"
+harness = false

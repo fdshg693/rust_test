@@ -1,7 +1,7 @@
 //! RPGゲームモード
 
 use super::{AppMode, Mode};
-use crate::rpg::{Game, Command};
+use crate::core::rpg::{Game, Command};
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{

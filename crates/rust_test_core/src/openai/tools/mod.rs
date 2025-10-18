@@ -5,7 +5,7 @@
 
 mod core; // core definitions: ToolDefinition, ToolParameters, builders
 mod sample_tools; // example constant-returning tool(s)
-mod docs; // docs reading tool
+mod read_docs; // docs reading tool
 mod tavily; // tavily search tool
 mod rpg; // RPG game tools
 
@@ -15,7 +15,7 @@ pub use core::{
     ToolParameters,
     ToolParametersBuilder,
 };
-pub use docs::build_read_doc_tool;
+pub use read_docs::build_read_doc_tool;
 pub use tavily::{build_tavily_search_tool, tavily_search};
 pub use sample_tools::{build_get_constants_tool, build_add_tool, build_number_guess_tool};
 pub use rpg::{

@@ -1,12 +1,12 @@
 use rand::{thread_rng, Rng};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 use super::models::*;
 use super::rules::RpgRules;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameSnapshot {
     pub player: Player,
     pub enemy: Enemy,
@@ -16,6 +16,7 @@ pub struct GameSnapshot {
     pub is_over: bool,
 }
 
+#[derive(Debug)]
 pub struct Game {
     pub rules: RpgRules,
     player: Player,

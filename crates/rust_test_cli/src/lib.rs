@@ -1,13 +1,9 @@
+// コアクレートから共通ロジックをインポート
+pub use rust_test_core::{self as core, OpenAIConfig};
 
-// 同階層のファイルをモジュールとしてインポート
-pub mod config;
-pub mod openai;
-pub mod sqlite; // SQLite utilities
-pub mod rpg; // Tiny RPG library (rules/models/game/ui) for AI tools
+// CLI固有のモジュール
 pub mod modes; // Mode system for different UI modes
-
-pub use config::OpenAIConfig;
-pub use sqlite::Db;
+pub mod ui; // UI components (TUI-specific)
 
 use color_eyre::Result;
 use crossterm::event::{self as crossterm_event, Event, KeyEventKind};

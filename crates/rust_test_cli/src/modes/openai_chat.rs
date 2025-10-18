@@ -1,8 +1,7 @@
 //! OpenAI対話モード
 
 use super::{AppMode, Mode};
-use crate::config::OpenAIConfig;
-use crate::openai;
+use crate::core::{OpenAIConfig, openai};
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
