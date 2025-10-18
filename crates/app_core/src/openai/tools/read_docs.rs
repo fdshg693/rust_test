@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use serde_json::{json, Value};
 use crate::openai::tools::{ToolDefinition, ToolParametersBuilder};
+use std::path::PathBuf;
 
 /// docs フォルダ配下（サブフォルダ含む）の Markdown / テキストを返すツール。
 /// - 入力は `path`（docs からの相対パス）。例: "benches.md", "guides/intro.md"
@@ -8,6 +9,14 @@ use crate::openai::tools::{ToolDefinition, ToolParametersBuilder};
 /// - `std::fs::canonicalize` でパストラバーサルを防止し、`docs` 配下であることを検証。
 /// 返却形式: { "path": string, "filename": string, "content": string, ("truncated": bool)? } または { "error": string }
 pub fn build_read_doc_tool() -> ToolDefinition {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let workspace_root = PathBuf::from(manifest_dir).parent().unwrap().parent().unwrap().to_path_buf();
+    let docs_root = workspace_root.join("docs");
+    build_read_doc_tool_with_root(docs_root)
+}
+
+/// Internal version that allows specifying a custom docs root (useful for testing)
+fn build_read_doc_tool_with_root(docs_root: PathBuf) -> ToolDefinition {
     let parameters = ToolParametersBuilder::new_object()
         .add_string("path", Some("Relative path under docs/ to a .md or .txt file (subfolders allowed)"))
         .required("path")
@@ -18,12 +27,12 @@ pub fn build_read_doc_tool() -> ToolDefinition {
         "read_docs_file",
         "Read a .md or .txt file from the local docs directory (including subfolders) and return its text content.",
         parameters,
-        Arc::new(move |args: &Value| read_docs_file_impl(args))
+        Arc::new(move |args: &Value| read_docs_file_impl(args, &docs_root))
     )
 }
 
 /// Implementation separated from the closure to allow easier testing / reuse.
-fn read_docs_file_impl(args: &Value) -> color_eyre::Result<Value> {
+fn read_docs_file_impl(args: &Value, docs_root: &std::path::Path) -> color_eyre::Result<Value> {
     use std::path::{Path, PathBuf};
     const MAX_BYTES: usize = 16 * 1024; // 16KB safety limit
 
@@ -40,7 +49,6 @@ fn read_docs_file_impl(args: &Value) -> color_eyre::Result<Value> {
     }
 
     // 3) Build candidate under docs and canonicalize
-    let docs_root = Path::new("docs");
     let candidate: PathBuf = docs_root.join(rel_path);
     let docs_root_canon = match std::fs::canonicalize(docs_root) {
         Ok(p) => p,
@@ -102,10 +110,20 @@ fn read_docs_file_impl(args: &Value) -> color_eyre::Result<Value> {
 mod tests {
     use super::*;
     use color_eyre::Result;
+    use std::path::PathBuf;
+
+    fn get_workspace_root() -> PathBuf {
+        // CARGO_MANIFEST_DIR points to crates/app_core
+        // We need to go up two levels to reach the workspace root
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        PathBuf::from(manifest_dir).parent().unwrap().parent().unwrap().to_path_buf()
+    }
 
     #[test]
     fn read_doc_tool_valid_file() -> Result<()> {
-        let tool = build_read_doc_tool();
+        let workspace_root = get_workspace_root();
+        let docs_root = workspace_root.join("docs");
+        let tool = build_read_doc_tool_with_root(docs_root);
         let out = tool.execute(&json!({"path": "benches.md"}))?;
         assert_eq!(out["filename"], "benches.md");
         assert!(out["content"].as_str().unwrap_or("").len() > 0);
@@ -114,7 +132,9 @@ mod tests {
 
     #[test]
     fn read_doc_impl_invalid_filename() -> Result<()> {
-        let val = read_docs_file_impl(&json!({"path": "../secret"})) ?;
+        let workspace_root = get_workspace_root();
+        let docs_root = workspace_root.join("docs");
+        let val = read_docs_file_impl(&json!({"path": "../secret"}), &docs_root)?;
         let err = val["error"].as_str().unwrap().to_string();
         assert!(err.contains("escapes docs root") || err.contains("absolute path not allowed") || err.contains("file not found"));
         Ok(())
