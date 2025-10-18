@@ -49,7 +49,7 @@ pub fn build_number_guess_tool(target: u32, max: u32) -> ToolDefinition {
     let params = ToolParametersBuilder::new_object()
         .add_integer(
             "guess",
-            Some("Your guessed integer between 1 and MAX (inclusive)"),
+            Some(&format!("get a result of whether the guess is low/high/correct")),
             Some(1),
             Some(max as i64),
         )
@@ -59,7 +59,7 @@ pub fn build_number_guess_tool(target: u32, max: u32) -> ToolDefinition {
 
     ToolDefinition::new(
         "number_guess",
-        "Number guessing game: compare provided 'guess' with the hidden target (1..=MAX) and return whether it is low, high, or correct.",
+        &format!("Tool for number-guessing-game.Use tools to get the hidden target (1..={})", max),
         params,
         Arc::new(move |v| {
             let guess = v

@@ -12,8 +12,8 @@ pub type ToolHandler = Arc<dyn Fn(&Value) -> Result<Value> + Send + Sync + 'stat
 /// 非同期が必要になったら `ToolHandler` を futures を返す型に差し替える拡張が可能。
 #[derive(Clone)]
 pub struct ToolDefinition {
-    pub name: &'static str,
-    pub description: &'static str,
+    pub name: String,
+    pub description: String,
     pub parameters: ToolParameters,  // JSON Schema wrapper
     pub strict: bool,
     handler: ToolHandler,
@@ -33,12 +33,18 @@ impl std::fmt::Debug for ToolDefinition {
 impl ToolDefinition {
     /// 新規作成
     pub fn new(
-        name: &'static str,
-        description: &'static str,
+        name: impl Into<String>,
+        description: impl Into<String>,
         parameters: impl Into<ToolParameters>,
         handler: ToolHandler,
     ) -> Self {
-        Self { name, description, parameters: parameters.into(), strict: false, handler }
+        Self { 
+            name: name.into(), 
+            description: description.into(), 
+            parameters: parameters.into(), 
+            strict: false, 
+            handler 
+        }
     }
 
     /// strict フラグを設定（OpenAI の strict function 呼び出しモード用）
@@ -50,8 +56,8 @@ impl ToolDefinition {
     /// OpenAI SDK の `FunctionObject` に変換
     pub fn function_object(&self) -> FunctionObject {
         FunctionObject {
-            name: self.name.to_string(),
-            description: Some(self.description.to_string()),
+            name: self.name.clone(),
+            description: Some(self.description.clone()),
             parameters: Some(self.parameters.as_value().clone()),
             strict: Some(self.strict),
         }
