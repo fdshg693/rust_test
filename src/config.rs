@@ -1,3 +1,6 @@
+/// デフォルトシステムプロンプト
+pub const DEFAULT_SYSTEM_PROMPT: &str = "あなたは簡潔な日本語で答えるアシスタントです。";
+
 /// アプリケーション設定
 pub struct OpenAIConfig {
     /// OpenAI APIモデル名
@@ -9,6 +12,8 @@ pub struct OpenAIConfig {
     pub max_completion_tokens: u32,
     /// イベントポーリング間隔（ミリ秒）
     pub poll_interval_ms: u64,
+    /// カスタムシステムプロンプト（None の場合はデフォルトを使用）
+    pub system_prompt: Option<String>,
 }
 
 impl Default for OpenAIConfig {
@@ -19,6 +24,7 @@ impl Default for OpenAIConfig {
             max_tokens: 10000,
             max_completion_tokens: 16000,
             poll_interval_ms: 100,
+            system_prompt: None,
         }
     }
 }

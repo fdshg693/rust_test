@@ -1,9 +1,8 @@
 use crate::config::OpenAIConfig;
 use crate::openai::tools::ToolDefinition;
+use crate::openai::ConversationHistory;
 use async_openai::types::{
     ChatCompletionRequestMessage,
-    ChatCompletionRequestSystemMessageArgs,
-    ChatCompletionRequestUserMessageArgs,
     CreateChatCompletionRequestArgs,
 };
 use async_openai::Client;
@@ -22,23 +21,21 @@ pub async fn propose_tool_call(
 ) -> Result<ToolCallDecision> {
     let client = Client::new();
 
-    let system = ChatCompletionRequestSystemMessageArgs::default()
-        .content("あなたは簡潔な日本語で答えるアシスタントです。")
-        .build()?;
-    let user = ChatCompletionRequestUserMessageArgs::default()
-        .content(prompt)
-        .build()?;
+    // ConversationHistoryを使用してメッセージを構築
+    let mut full_history = ConversationHistory::with_default_system();
+    if !prompt.is_empty() {
+        full_history.add_user(prompt);
+    }
+    // 既存の会話履歴をマージ
+    for msg in history {
+        full_history.push(msg.clone());
+    }
 
     let tools_for_api: Vec<_> = tools.iter().map(|t| t.as_chat_tool()).collect();
 
-    let mut messages: Vec<ChatCompletionRequestMessage> = Vec::with_capacity(1 + history.len() + 1);
-    messages.push(system.into());
-    messages.push(user.into());
-    messages.extend_from_slice(history);
-
     let req = CreateChatCompletionRequestArgs::default()
         .model(&config.model)
-        .messages(messages)
+        .messages(full_history.as_slice_with_system())
         .tools(tools_for_api)
         .tool_choice("auto")
         .max_completion_tokens(config.max_completion_tokens)

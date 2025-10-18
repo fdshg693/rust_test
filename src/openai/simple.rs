@@ -1,9 +1,8 @@
 //! シンプルな単発問い合わせAPI
 
 use crate::config::OpenAIConfig;
+use crate::openai::ConversationHistory;
 use async_openai::types::{
-    ChatCompletionRequestSystemMessageArgs,
-    ChatCompletionRequestUserMessageArgs,
     CreateChatCompletionRequestArgs,
 };
 use async_openai::Client;
@@ -16,17 +15,13 @@ use tracing::{info, debug, instrument};
 pub async fn get_ai_answer_once(prompt: &str, config: &OpenAIConfig) -> Result<String> {
     let client = Client::new();
 
-    // シンプルなsystem + user構成
-    let system = ChatCompletionRequestSystemMessageArgs::default()
-        .content("あなたは簡潔な日本語で答えるアシスタントです。")
-        .build()?;
-    let user = ChatCompletionRequestUserMessageArgs::default()
-        .content(prompt)
-        .build()?;
+    // シンプルなsystem + user構成をConversationHistoryで構築
+    let mut history = ConversationHistory::with_default_system();
+    history.add_user(prompt);
 
     let req = CreateChatCompletionRequestArgs::default()
         .model(&config.model)
-        .messages([system.into(), user.into()])
+        .messages(history.as_slice_with_system())
         .max_completion_tokens(config.max_completion_tokens)
         // .max_tokens(config.max_tokens)
         .build()?;
