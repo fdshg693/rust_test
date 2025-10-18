@@ -48,7 +48,7 @@ src/
 - API: `upsert_text`, `read_text`, `list_files`, etc.
 - Supports both text and binary data
 
-## Architecture (Phase 4)
+## Architecture
 
 ### Mode Trait
 ```rust
@@ -65,11 +65,6 @@ pub trait Mode {
 3. Each mode has its own state, rendering, and event handling
 4. Esc returns to menu
 5. Exit from menu terminates the application
-
-### Old Files (Phase 4 cleanup)
-- ❌ Deleted: `src/app.rs` → moved to `src/modes/openai_chat.rs`
-- ❌ Deleted: `src/event.rs` → integrated into Mode::handle_key()
-- ❌ Deleted: `src/ui.rs` → each mode has its own render() method
 
 ## Usage
 
