@@ -1,10 +1,8 @@
 //! OpenAI APIワーカー（TUIとは別スレッドで動く）
-//!
-//! 以前は旧 function calling API (`functions` フィールド) を直接扱っていたが、
-//! 現在は `call_tool` モジュールの `propose_tool_call` と `tool` モジュールの
+//!`call_tool` モジュールの `propose_tool_call` と `tool` モジュールの
 //! `ToolDefinition` を用いて 2 ステップ (提案→実行→最終回答) を実装する。
 
-use crate::config::{Config};
+use crate::config::{OpenAIConfig};
 use crate::openai::MultiStepAnswer;
 use std::sync::mpsc::{Receiver, Sender};
 use tokio::runtime::Runtime;
@@ -18,7 +16,7 @@ use super::tools::{
 pub fn start_openai_worker(
     rx_prompt: Receiver<String>,
     tx_answer: Sender<String>,
-    config: Config,
+    config: OpenAIConfig,
 ) {
     std::thread::spawn(move || {
         // 専用スレッド内でTokioランタイムを構築

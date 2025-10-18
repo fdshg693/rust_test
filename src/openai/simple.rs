@@ -1,6 +1,6 @@
 //! シンプルな単発問い合わせAPI
 
-use crate::config::Config;
+use crate::config::OpenAIConfig;
 use async_openai::types::{
     ChatCompletionRequestSystemMessageArgs,
     ChatCompletionRequestUserMessageArgs,
@@ -13,7 +13,7 @@ use tracing::{info, debug, instrument};
 
 /// 単純な1回の問い合わせでAIの回答を取得する（関数呼び出しやワーカーループなし）
 #[instrument(name = "get_ai_answer_once", skip(config))]
-pub async fn get_ai_answer_once(prompt: &str, config: &Config) -> Result<String> {
+pub async fn get_ai_answer_once(prompt: &str, config: &OpenAIConfig) -> Result<String> {
     let client = Client::new();
 
     // シンプルなsystem + user構成
@@ -27,7 +27,8 @@ pub async fn get_ai_answer_once(prompt: &str, config: &Config) -> Result<String>
     let req = CreateChatCompletionRequestArgs::default()
         .model(&config.model)
         .messages([system.into(), user.into()])
-        .max_tokens(config.max_tokens)
+        .max_completion_tokens(config.max_completion_tokens)
+        // .max_tokens(config.max_tokens)
         .build()?;
 
     info!(target: "openai", "simple_request: model={}, max_tokens={}", config.model, config.max_tokens);
@@ -44,7 +45,7 @@ pub async fn get_ai_answer_once(prompt: &str, config: &Config) -> Result<String>
 
 /// ランタイムを内部で作成してブロッキングで1回の回答を取得するヘルパー
 #[instrument(name = "get_ai_answer_once_blocking", skip(config))]
-pub fn get_ai_answer_once_blocking(prompt: &str, config: &Config) -> Result<String> {
+pub fn get_ai_answer_once_blocking(prompt: &str, config: &OpenAIConfig) -> Result<String> {
     let rt = Runtime::new()?;
     rt.block_on(get_ai_answer_once(prompt, config))
 }

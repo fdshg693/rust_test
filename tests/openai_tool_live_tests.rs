@@ -1,4 +1,4 @@
-use rust_test::config::Config;
+use rust_test::config::OpenAIConfig;
 use rust_test::openai::{propose_tool_call_blocking, ToolCallDecision};
 mod common;
 
@@ -20,7 +20,7 @@ fn skip_if_no_api_key() -> bool {
 fn live_tool_call_none_tools_returns_text() -> Result<(), Box<dyn std::error::Error>> {
     if skip_if_no_api_key() { return Ok(()); }
 
-    let cfg = Config::new();
+    let cfg = OpenAIConfig::new();
     let prompt = "1+1は？短く答えて。";
     let empty: [rust_test::openai::ToolDefinition; 0] = [];
     let history: [async_openai::types::ChatCompletionRequestMessage; 0] = [];

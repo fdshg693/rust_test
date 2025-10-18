@@ -1,7 +1,7 @@
 //! OpenAI対話モード
 
 use super::{AppMode, Mode};
-use crate::config::Config;
+use crate::config::OpenAIConfig;
 use crate::openai;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -38,11 +38,11 @@ pub struct OpenAIChatMode {
 impl OpenAIChatMode {
     /// 新しいOpenAI対話モードインスタンスを作成
     pub fn new() -> Self {
-        Self::with_config(Config::new())
+        Self::with_config(OpenAIConfig::new())
     }
 
     /// 設定を指定してOpenAI対話モードインスタンスを作成
-    pub fn with_config(config: Config) -> Self {
+    pub fn with_config(config: OpenAIConfig) -> Self {
         // プロンプト送信用チャンネル
         let (tx_prompt, rx_prompt) = mpsc::channel::<String>();
         // AI回答受信用チャンネル

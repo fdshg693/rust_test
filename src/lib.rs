@@ -6,7 +6,7 @@ pub mod sqlite; // SQLite utilities
 pub mod rpg; // Tiny RPG library (rules/models/game/ui) for AI tools
 pub mod modes; // Mode system for different UI modes
 
-pub use config::Config;
+pub use config::OpenAIConfig;
 pub use sqlite::Db;
 
 use color_eyre::Result;

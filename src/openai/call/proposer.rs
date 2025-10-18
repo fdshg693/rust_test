@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::OpenAIConfig;
 use crate::openai::tools::ToolDefinition;
 use async_openai::types::{
     ChatCompletionRequestMessage,
@@ -18,7 +18,7 @@ pub async fn propose_tool_call(
     history: &[ChatCompletionRequestMessage],
     prompt: &str,
     tools: &[ToolDefinition],
-    config: &Config,
+    config: &OpenAIConfig,
 ) -> Result<ToolCallDecision> {
     let client = Client::new();
 
@@ -41,6 +41,7 @@ pub async fn propose_tool_call(
         .messages(messages)
         .tools(tools_for_api)
         .tool_choice("auto")
+        .max_completion_tokens(config.max_completion_tokens)
         .max_tokens(config.max_tokens)
         .build()?;
 
@@ -74,7 +75,7 @@ pub fn propose_tool_call_blocking(
     history: &[ChatCompletionRequestMessage],
     prompt: &str,
     tools: &[ToolDefinition],
-    config: &Config,
+    config: &OpenAIConfig,
 ) -> Result<ToolCallDecision> {
     let rt = Runtime::new()?;
     rt.block_on(propose_tool_call(history, prompt, tools, config))

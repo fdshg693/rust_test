@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::OpenAIConfig;
 use crate::openai::tools::ToolDefinition;
 use crate::openai::ConversationHistory;
 use color_eyre::Result;
@@ -13,7 +13,7 @@ use super::types::{MultiStepAnswer, MultiStepLogEvent, ToolCallDecision, ToolRes
 pub async fn multi_step_tool_answer(
     original_user_prompt: &str,
     tools: &[ToolDefinition],
-    config: &Config,
+    config: &OpenAIConfig,
     max_loops: Option<usize>,
 ) -> Result<MultiStepAnswer> {
     multi_step_tool_answer_with_logger_internal(
@@ -29,7 +29,7 @@ pub async fn multi_step_tool_answer(
 pub async fn multi_step_tool_answer_with_logger(
     original_user_prompt: &str,
     tools: &[ToolDefinition],
-    config: &Config,
+    config: &OpenAIConfig,
     max_loops: Option<usize>,
     logger: impl FnMut(&MultiStepLogEvent),
 ) -> Result<MultiStepAnswer> {
@@ -51,7 +51,7 @@ pub async fn multi_step_tool_answer_with_logger(
 async fn multi_step_tool_answer_with_logger_internal(
     original_user_prompt: &str,
     tools: &[ToolDefinition],
-    config: &Config,
+    config: &OpenAIConfig,
     max_loops: Option<usize>,
     mut logger: Option<&mut dyn FnMut(&MultiStepLogEvent)>,
 ) -> Result<MultiStepAnswer> {
@@ -128,7 +128,7 @@ async fn multi_step_tool_answer_with_logger_internal(
 pub fn multi_step_tool_answer_blocking(
     original_user_prompt: &str,
     tools: &[ToolDefinition],
-    config: &Config,
+    config: &OpenAIConfig,
     max_loops: Option<usize>,
 ) -> Result<MultiStepAnswer> {
     let rt = Runtime::new()?;
@@ -139,7 +139,7 @@ pub fn multi_step_tool_answer_blocking(
 pub fn multi_step_tool_answer_blocking_with_logger(
     original_user_prompt: &str,
     tools: &[ToolDefinition],
-    config: &Config,
+    config: &OpenAIConfig,
     max_loops: Option<usize>,
     logger: impl FnMut(&MultiStepLogEvent),
 ) -> Result<MultiStepAnswer> {

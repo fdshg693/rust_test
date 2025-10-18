@@ -1,4 +1,4 @@
-use rust_test::config::Config;
+use rust_test::config::OpenAIConfig;
 use rust_test::openai::get_ai_answer_once_blocking;
 mod common;
 
@@ -17,7 +17,7 @@ fn live_get_ai_answer_once_blocking() -> Result<(), Box<dyn std::error::Error>> 
         return Ok(());
     }
 
-    let cfg = Config::new();
+    let cfg = OpenAIConfig::new();
     let prompt = "1+1は？ 短く答えて。";
     let ans = get_ai_answer_once_blocking(prompt, &cfg)?;
     tracing::info!(target="live_test", response=%ans, "live simple answer received");

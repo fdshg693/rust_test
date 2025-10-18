@@ -1,4 +1,4 @@
-use rust_test::config::Config;
+use rust_test::config::OpenAIConfig;
 use rust_test::openai::{propose_tool_call_blocking, ToolResolution, build_tavily_search_tool, resolve_and_execute_tool_call};
 mod common;
 
@@ -24,7 +24,7 @@ fn live_tool_call_with_tavily_search() -> Result<(), Box<dyn std::error::Error>>
         return Ok(());
     }
     let tool_def = build_tavily_search_tool();  
-    let cfg = Config::new();
+    let cfg = OpenAIConfig::new();
     let prompt = "1+2";
     let history: [async_openai::types::ChatCompletionRequestMessage; 0] = [];
     let decision = propose_tool_call_blocking(&history, prompt, &[tool_def.clone()], &cfg)?;

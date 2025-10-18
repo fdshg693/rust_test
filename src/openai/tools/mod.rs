@@ -7,7 +7,6 @@ mod core; // core definitions: ToolDefinition, ToolParameters, builders
 mod sample_tools; // example constant-returning tool(s)
 mod docs; // docs reading tool
 mod tavily; // tavily search tool
-mod number_guess; // number guessing game tool
 mod rpg; // RPG game tools
 
 pub use core::{
@@ -18,8 +17,7 @@ pub use core::{
 };
 pub use docs::build_read_doc_tool;
 pub use tavily::{build_tavily_search_tool, tavily_search};
-pub use sample_tools::{build_get_constants_tool, build_add_tool};
-pub use number_guess::build_number_guess_tool;
+pub use sample_tools::{build_get_constants_tool, build_add_tool, build_number_guess_tool};
 pub use rpg::{
     build_rpg_get_rules_tool,
     build_rpg_get_state_tool,

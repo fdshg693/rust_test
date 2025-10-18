@@ -1,4 +1,4 @@
-use rust_test::config::{Config, X, Y};
+use rust_test::config::{OpenAIConfig};
 use rust_test::openai::{multi_step_tool_answer_blocking_with_logger, build_get_constants_tool, build_add_tool, ToolResolution};
 mod common;
 
@@ -26,9 +26,9 @@ fn skip_if_no_api_key() -> bool {
 fn live_multi_step_calculates_x_plus_y() -> Result<(), Box<dyn std::error::Error>> {
     if skip_if_no_api_key() { return Ok(()); }
 
-    let cfg = Config::new();
+    let cfg = OpenAIConfig::new();
     let tools = vec![
-        build_get_constants_tool(X, Y),
+        build_get_constants_tool(42, 7),
         build_add_tool(),
     ];
 
@@ -58,7 +58,7 @@ fn live_multi_step_calculates_x_plus_y() -> Result<(), Box<dyn std::error::Error
     assert!(used_get_constants || used_add, "expected at least one of get_constants or add to be executed");
 
     // Heuristic: final answer should mention the computed sum
-    let sum = (X + Y) as i64; // sums in JSON are i64 in our tool
+    let sum = (42 + 7) as i64; // sums in JSON are i64 in our tool
     let ans = answer.final_answer.replace(',', ""); // tolerate commas
     let sum_str = sum.to_string();
     assert!(ans.contains(&sum_str) || ans.contains("合計") || ans.contains("足し算") || ans.contains("和"), "final answer should likely include the sum or mention an addition");

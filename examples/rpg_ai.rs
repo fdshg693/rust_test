@@ -1,5 +1,5 @@
 //! Example: Let the model play the RPG via tools (no TUI required)
-use rust_test::config::Config;
+use rust_test::config::OpenAIConfig;
 use rust_test::openai::{
     build_rpg_tools,
     multi_step_tool_answer_blocking_with_logger,
@@ -26,7 +26,7 @@ You are going to play the Tiny CLI RPG using tools only.
 Reply with your final summary as plain text.
 "#;
 
-    let config = Config::default();
+    let config = OpenAIConfig::default();
     let answer = multi_step_tool_answer_blocking_with_logger(
         prompt,
         &tools,
